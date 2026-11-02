@@ -1,7 +1,13 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS frontend-build
+WORKDIR /frontend
+COPY frontend-web/ ./
+RUN dotnet publish frontend-web.csproj -c Release -o /publish
+
 FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
+COPY --from=frontend-build /publish/wwwroot ./src/main/resources/static
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:17-jre

@@ -10,6 +10,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  @Bean PasswordEncoder passwordEncoder(){return new BCryptPasswordEncoder();}
  @Bean SecurityFilterChain filterChain(HttpSecurity http,JwtFilter jwt)throws Exception{
   return http.csrf(c->c.disable()).authorizeHttpRequests(a->a
+   .requestMatchers("/", "/index.html", "/favicon.ico", "/icon-192.png", "/*.styles.css", "/css/**", "/lib/**", "/_framework/**", "/_content/**").permitAll()
    .requestMatchers("/api/auth/login","/api/device/**").permitAll()
    .requestMatchers("/api/employee-portal/**").hasRole("EMPLOYEE")
    .requestMatchers("/ws").hasAnyRole("ADMIN","EMPLOYEE")

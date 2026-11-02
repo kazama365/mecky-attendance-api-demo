@@ -1,0 +1,276 @@
+@page "/"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Mecky's Attendance</PageTitle>
+
+@if (!isSignedIn)
+{
+    <main class="login-screen">
+        <section class="login-card">
+            <div class="login-brand">
+                <div class="brand-mark">M</div>
+                <p class="eyebrow">MECKY'S CONSUMER ELECTRONICS</p>
+                <h1>Attendance, made simple.</h1>
+                <p class="brand-copy">A clear view of every shift, scan, and workday in one place.</p>
+                <div class="login-feature"><span>01</span><div><strong>One attendance record</strong><small>Fingerprint scans appear in the same system.</small></div></div>
+                <div class="login-feature"><span>02</span><div><strong>Admin and worker access</strong><small>Each account sees the information meant for them.</small></div></div>
+                <div class="brand-footer">MECKY ATTENDANCE SYSTEM <span>•</span> DEMO</div>
+            </div>
+            <div class="login-form-panel">
+                <div class="mobile-brand"><div class="brand-mark">M</div><span>MECKY'S</span></div>
+                <p class="eyebrow green">WELCOME BACK</p>
+                <h2>Sign in to your account</h2>
+                <p class="muted">Use your admin or worker account to continue.</p>
+                <form class="login-form" @onsubmit="LoginAsync" @onsubmit:preventDefault="true">
+                    <label for="username">Username</label>
+                    <input id="username" autocomplete="username" @bind="username" placeholder="Enter your username" required />
+                    <label for="password">Password</label>
+                    <input id="password" type="password" autocomplete="current-password" @bind="password" placeholder="Enter your password" required />
+                    @if (!string.IsNullOrWhiteSpace(errorMessage))
+                    {
+                        <div class="alert error" role="alert">@errorMessage</div>
+                    }
+                    <button class="button primary full" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in") <span aria-hidden="true">→</span></button>
+                </form>
+                <div class="demo-box">
+                    <div><strong>Demo accounts</strong><small>These accounts work on the demo server only.</small></div>
+                    <button class="demo-choice" type="button" @onclick="UseAdminDemo"><span>Admin</span><b>Fill details</b></button>
+                    <button class="demo-choice" type="button" @onclick="UseWorkerDemo"><span>Worker</span><b>Fill details</b></button>
+                </div>
+                <p class="secure-note"><span>●</span> Connected to this website's attendance server</p>
+            </div>
+        </section>
+    </main>
+}
+else if (isWorker)
+{
+    <div class="portal-shell">
+        <header class="portal-header"><a class="wordmark" href="/"><span class="brand-mark small">M</span><span>MECKY'S<small>ATTENDANCE PORTAL</small></span></a><div class="header-user"><span class="avatar">@Initials(worker?.fullName)</span><span class="user-name">@worker?.fullName<small>Worker account</small></span><button class="button outline" @onclick="SignOut">Sign out</button></div></header>
+        <main class="portal-main">
+            <div class="page-heading"><div><p class="eyebrow green">MY WORKSPACE</p><h1>My attendance</h1><p class="muted">Review your scans and workdays for up to five days.</p></div><button class="button outline" @onclick="LoadWorkerAttendanceAsync" disabled="@busy">↻ &nbsp;Refresh status</button></div>
+            @if (!string.IsNullOrWhiteSpace(errorMessage)) { <div class="alert error" role="alert">@errorMessage</div> }
+            <section class="welcome-strip"><div class="welcome-icon">@Initials(worker?.fullName)</div><div><span class="muted">SIGNED IN AS</span><h2>@(worker?.fullName ?? username)</h2><p>@(worker?.position ?? "Employee") <span class="dot-separator">•</span> ID @worker?.employeeId</p></div><div class="live-pill"><span></span> Connected</div></section>
+            <section class="panel range-panel"><div><h2>Choose the days to view</h2><p class="muted">You can check a range of one to five calendar days.</p></div><div class="range-controls"><label>From<input type="date" @bind="fromDate" /></label><span class="range-dash">—</span><label>To<input type="date" @bind="toDate" /></label><button class="button primary" @onclick="LoadWorkerAttendanceAsync" disabled="@busy">Show days</button></div></section>
+            @if (workerAttendance is not null)
+            {
+                <section class="stat-grid worker-stats"><article class="stat-card"><span>Days worked</span><strong>@workerAttendance.daysWorked</strong><small>Days with a time-in scan</small></article><article class="stat-card"><span>Days absent</span><strong>@workerAttendance.daysAbsent</strong><small>Recorded absence</small></article><article class="stat-card"><span>Days in range</span><strong>@workerAttendance.days.Count</strong><small>@ShortDate(workerAttendance.from) – @ShortDate(workerAttendance.to)</small></article></section>
+                <section class="panel table-panel"><div class="panel-heading"><div><h2>Daily status</h2><p class="muted">Most recent refresh: @lastUpdated</p></div><span class="record-count">@workerAttendance.days.Count DAYS</span></div><div class="table-scroll"><table><thead><tr><th>Day</th><th>Schedule</th><th>Time in</th><th>Time out</th><th>Status</th><th>Hours</th></tr></thead><tbody>
+                    @foreach (var day in workerAttendance.days)
+                    {
+                        <tr><td><strong>@ShortDate(day.date)</strong><small>@Weekday(day.date)</small></td><td>@(day.scheduled ? "Scheduled" : "Off day")</td><td>@FormatMoment(day.timeIn)</td><td>@FormatMoment(day.timeOut)</td><td><span class="status @StatusClass(day.status)">@PrettyStatus(day.status)</span></td><td>@day.hoursWorked.ToString("0.00")</td></tr>
+                    }
+                </tbody></table></div></section>
+            }
+            <p class="footnote">Attendance is updated when a scan reaches the company's system. Select <strong>Refresh status</strong> to check for the latest scan.</p>
+        </main>
+    </div>
+}
+else
+{
+    <div class="admin-shell">
+        <aside class="sidebar"><a class="wordmark side-wordmark" href="/"><span class="brand-mark">M</span><span>MECKY'S<small>CEO / ADMIN</small></span></a><div class="side-label">WORKSPACE</div><nav>
+            <button class="side-link @(activeView == "Dashboard" ? "active" : "")" @onclick='() => SelectView("Dashboard")'><span>◫</span>Dashboard</button>
+            <button class="side-link @(activeView == "Employees" ? "active" : "")" @onclick='() => SelectView("Employees")'><span>♙</span>Employees</button>
+            <button class="side-link @(activeView == "Attendance" ? "active" : "")" @onclick="OpenAttendanceAsync"><span>◷</span>Attendance</button>
+        </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
+        <main class="admin-main">
+            <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
+            <div class="admin-content">
+                @if (!string.IsNullOrWhiteSpace(errorMessage)) { <div class="alert error" role="alert">@errorMessage</div> }
+                @if (activeView == "Dashboard")
+                {
+                    <div class="page-heading"><div><p class="eyebrow green">OVERVIEW</p><h1>Dashboard</h1><p class="muted">Attendance summary for @ShortDate(dashboard?.date ?? today).</p></div><button class="button outline" @onclick="LoadAdminAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <section class="stat-grid"><article class="stat-card"><span>Active employees</span><strong>@(dashboard?.employees ?? 0)</strong><small>Employee records</small></article><article class="stat-card"><span>Present today</span><strong>@(dashboard?.present ?? 0)</strong><small>Time-in recorded</small></article><article class="stat-card"><span>Absent today</span><strong>@(dashboard?.absent ?? 0)</strong><small>Based on active employees</small></article><article class="stat-card"><span>Late today</span><strong>@(dashboard?.late ?? 0)</strong><small>Late arrivals</small></article></section>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Latest attendance</h2><p class="muted">Today's latest employee scans</p></div><button class="text-button" @onclick="OpenAttendanceAsync">View attendance →</button></div>@AttendanceTable(dashboard?.latest ?? new List<AttendanceRecord>())</section>
+                    <section class="notice-card"><span class="notice-icon">✓</span><div><strong>Your system is ready</strong><p>Manage employees, review attendance, and let workers check their own workdays.</p></div></section>
+                }
+                else if (activeView == "Employees")
+                {
+                    <div class="page-heading"><div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Employee records linked to this attendance system.</p></div><button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">@employees.Count employee records</p></div><span class="record-count">EMPLOYEES</span></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th></tr></thead><tbody>@foreach (var employee in employees) { <tr><td><strong>@employee.fullName</strong></td><td>@employee.employeeId</td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td></tr> }</tbody></table></div></section>
+                }
+                else
+                {
+                    <div class="page-heading"><div><p class="eyebrow green">DAILY RECORDS</p><h1>Attendance</h1><p class="muted">Review fingerprint scans for a selected date.</p></div><div class="date-toolbar"><input type="date" @bind="attendanceDate" /><button class="button primary" @onclick="LoadAttendanceAsync" disabled="@busy">Show date</button></div></div>
+                    <section class="stat-grid compact-stats"><article class="stat-card"><span>Records</span><strong>@attendanceRows.Count</strong></article><article class="stat-card"><span>Present</span><strong>@attendanceRows.Count(x => x.status == "PRESENT" || x.status == "TIME_OUT")</strong></article><article class="stat-card"><span>Late</span><strong>@attendanceRows.Count(x => x.status == "LATE" || x.lateMinutes > 0)</strong></article></section>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Attendance records</h2><p class="muted">@ShortDate(attendanceDate)</p></div><span class="record-count">@attendanceRows.Count RECORDS</span></div>@AttendanceTable(attendanceRows)</section>
+                }
+                <p class="footnote">Mecky's attendance management <span>•</span> Signed in as @username</p>
+            </div>
+        </main>
+    </div>
+}
+
+@code {
+    private bool isSignedIn;
+    private bool isWorker;
+    private bool busy;
+    private string username = "";
+    private string password = "";
+    private string errorMessage = "";
+    private string activeView = "Dashboard";
+    private string today = DateTime.Now.ToString("yyyy-MM-dd");
+    private DateTime fromDate = DateTime.Today.AddDays(-4);
+    private DateTime toDate = DateTime.Today;
+    private DateTime attendanceDate = DateTime.Today;
+    private string lastUpdated = "—";
+    private DashboardSummary? dashboard;
+    private List<EmployeeRecord> employees = new();
+    private List<AttendanceRecord> attendanceRows = new();
+    private WorkerProfile? worker;
+    private WorkerAttendance? workerAttendance;
+
+    private void UseAdminDemo() { username = "admin"; password = "DemoAdmin2026!"; errorMessage = ""; }
+    private void UseWorkerDemo() { username = "demo-worker-one"; password = "DemoWorker2026!"; errorMessage = ""; }
+
+    private async Task LoginAsync()
+    {
+        if (busy) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/auth/login", new { username, password });
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = await ReadServerErrorAsync(response);
+                return;
+            }
+            var result = await response.Content.ReadFromJsonAsync<LoginResult>();
+            if (result is null || string.IsNullOrWhiteSpace(result.token))
+            {
+                errorMessage = "The server did not return a sign-in token. Please try again.";
+                return;
+            }
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", result.token);
+            isWorker = string.Equals(result.role, "EMPLOYEE", StringComparison.OrdinalIgnoreCase);
+            if (!isWorker && !string.Equals(result.role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+            {
+                Http.DefaultRequestHeaders.Authorization = null;
+                errorMessage = "This account does not have access to the attendance portal.";
+                return;
+            }
+            isSignedIn = true;
+            if (isWorker) await LoadWorkerAsync();
+            else await LoadAdminAsync();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The attendance server did not respond. Wait a moment and try again; the free Render service may be waking up.";
+        }
+        catch (Exception)
+        {
+            errorMessage = "Could not sign in. Please check your details and try again.";
+        }
+        finally { busy = false; }
+    }
+
+    private async Task LoadAdminAsync()
+    {
+        errorMessage = "";
+        try
+        {
+            dashboard = await Http.GetFromJsonAsync<DashboardSummary>("api/dashboard");
+            await LoadEmployeesAsync();
+            if (dashboard is not null) attendanceRows = dashboard.latest;
+        }
+        catch (HttpRequestException) { errorMessage = "We could not load the admin dashboard. Refresh the page data or sign in again."; }
+    }
+
+    private async Task LoadEmployeesAsync()
+    {
+        try
+        {
+            var page = await Http.GetFromJsonAsync<EmployeePage>("api/employees?page=0&size=100");
+            employees = page?.content ?? new List<EmployeeRecord>();
+        }
+        catch (HttpRequestException) { errorMessage = "Employee records could not be loaded from the server."; }
+    }
+
+    private async Task OpenAttendanceAsync()
+    {
+        activeView = "Attendance";
+        attendanceDate = DateTime.Today;
+        await LoadAttendanceAsync();
+    }
+
+    private async Task LoadAttendanceAsync()
+    {
+        errorMessage = "";
+        try { attendanceRows = await Http.GetFromJsonAsync<List<AttendanceRecord>>($"api/attendance?date={attendanceDate:yyyy-MM-dd}") ?? new(); }
+        catch (HttpRequestException) { errorMessage = "Attendance records could not be loaded. Try refreshing or sign in again."; }
+    }
+
+    private async Task LoadWorkerAsync()
+    {
+        try
+        {
+            worker = await Http.GetFromJsonAsync<WorkerProfile>("api/employee-portal/me");
+            await LoadWorkerAttendanceAsync();
+        }
+        catch (HttpRequestException) { errorMessage = "Your worker profile could not be loaded. Please sign in again."; }
+    }
+
+    private async Task LoadWorkerAttendanceAsync()
+    {
+        errorMessage = "";
+        try
+        {
+            workerAttendance = await Http.GetFromJsonAsync<WorkerAttendance>($"api/employee-portal/attendance?from={fromDate:yyyy-MM-dd}&to={toDate:yyyy-MM-dd}");
+            lastUpdated = DateTime.Now.ToString("MMM d, yyyy h:mm tt");
+        }
+        catch (HttpRequestException) { errorMessage = "Could not load those days. Choose a range of one to five past or current days, then try again."; }
+    }
+
+    private static async Task<string> ReadServerErrorAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            if (json.RootElement.TryGetProperty("error", out var error)) return error.GetString() ?? "Sign-in failed. Check your username and password.";
+            if (json.RootElement.TryGetProperty("message", out var message)) return message.GetString() ?? "Sign-in failed. Check your username and password.";
+        }
+        catch { }
+        return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? "Too many attempts. Wait 10 minutes, then try again." : "Username or password is incorrect.";
+    }
+
+    private void SignOut()
+    {
+        Http.DefaultRequestHeaders.Authorization = null;
+        isSignedIn = false; isWorker = false; username = ""; password = ""; errorMessage = "";
+        worker = null; workerAttendance = null; dashboard = null; employees.Clear(); attendanceRows.Clear();
+    }
+
+    private void SelectView(string view) { activeView = view; errorMessage = ""; }
+    private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "ME" : string.Join("", name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
+    private static string ShortDate(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("MMM d, yyyy") : value ?? "—";
+    private static string ShortDate(DateTime value) => value.ToString("MMM d, yyyy");
+    private static string Weekday(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("dddd") : "";
+    private static string FormatMoment(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("h:mm tt") : "—";
+    private static string PrettyStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Unknown";
+        var label = value.Replace('_', ' ').ToLowerInvariant();
+        return char.ToUpperInvariant(label[0]) + label[1..];
+    }
+    private static string StatusClass(string? value) => value?.ToUpperInvariant() switch { "PRESENT" or "TIME_OUT" => "good", "LATE" => "warning", "ABSENT" => "bad", "NO_RECORD" or "NOT_STARTED" => "neutral", _ => "neutral" };
+
+    private sealed class LoginResult { public string token { get; set; } = ""; public string role { get; set; } = ""; public string username { get; set; } = ""; }
+    private sealed class DashboardSummary { public string date { get; set; } = ""; public int employees { get; set; } public int present { get; set; } public int late { get; set; } public int absent { get; set; } public List<AttendanceRecord> latest { get; set; } = new(); }
+    private sealed class EmployeePage { public List<EmployeeRecord> content { get; set; } = new(); }
+    private sealed class EmployeeRecord { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } public int? sensorSlotId { get; set; } }
+    private sealed class AttendanceRecord { public long id { get; set; } public EmployeeRecord employee { get; set; } = new(); public string attendanceDate { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public string status { get; set; } = ""; public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } }
+    private sealed class WorkerProfile { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } }
+    private sealed class WorkerAttendance { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string from { get; set; } = ""; public string to { get; set; } = ""; public List<WorkerDay> days { get; set; } = new(); public int daysWorked { get; set; } public int daysAbsent { get; set; } }
+    private sealed class WorkerDay { public string date { get; set; } = ""; public bool scheduled { get; set; } public string status { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } public string? absenceReason { get; set; } }
+}
+
+@code {
+    private RenderFragment AttendanceTable(List<AttendanceRecord> Rows) => @<div class="table-scroll"><table><thead><tr><th>Employee</th><th>Time in</th><th>Time out</th><th>Status</th><th>Late</th><th>Hours</th></tr></thead><tbody>
+        @if (Rows.Count == 0) { <tr><td colspan="6" class="empty-cell">No attendance records for this date.</td></tr> }
+        @foreach (var row in Rows) { <tr><td><strong>@row.employee.fullName</strong><small>@row.employee.employeeId</small></td><td>@FormatMoment(row.timeIn)</td><td>@FormatMoment(row.timeOut)</td><td><span class="status @StatusClass(row.status)">@PrettyStatus(row.status)</span></td><td>@row.lateMinutes min</td><td>@row.hoursWorked.ToString("0.00")</td></tr> }
+    </tbody></table></div>;
+}
