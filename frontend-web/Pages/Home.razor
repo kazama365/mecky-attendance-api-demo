@@ -1,7 +1,9 @@
 @page "/"
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using Microsoft.JSInterop
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Mecky's Attendance</PageTitle>
 
@@ -20,25 +22,52 @@
             </div>
             <div class="login-form-panel">
                 <div class="mobile-brand"><div class="brand-mark">M</div><span>MECKY'S</span></div>
-                <p class="eyebrow green">WELCOME BACK</p>
-                <h2>Sign in to your account</h2>
-                <p class="muted">Use your admin or worker account to continue.</p>
-                <form class="login-form" @onsubmit="LoginAsync" @onsubmit:preventDefault="true">
-                    <label for="username">Username</label>
-                    <input id="username" autocomplete="username" @bind="username" placeholder="Enter your username" required />
-                    <label for="password">Password</label>
-                    <input id="password" type="password" autocomplete="current-password" @bind="password" placeholder="Enter your password" required />
-                    @if (!string.IsNullOrWhiteSpace(errorMessage))
-                    {
-                        <div class="alert error" role="alert">@errorMessage</div>
-                    }
-                    <button class="button primary full" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in") <span aria-hidden="true">→</span></button>
-                </form>
-                <div class="demo-box">
+                <p class="eyebrow green">@(showSignup ? "WORKER REGISTRATION" : "WELCOME BACK")</p>
+                <h2>@(showSignup ? "Create a worker account" : "Sign in to your account")</h2>
+                <p class="muted">@(showSignup ? "Use the Employee ID given by the Admin. Your account needs approval before sign-in." : "Use your admin or worker account to continue.")</p>
+                @if (!showSignup)
+                {
+                    <form class="login-form" @onsubmit="LoginAsync" @onsubmit:preventDefault="true">
+                        <label for="username">Username</label>
+                        <input id="username" autocomplete="username" @bind="username" placeholder="Enter your username" required />
+                        <label for="password">Password</label>
+                        <input id="password" type="password" autocomplete="current-password" @bind="password" placeholder="Enter your password" required />
+                        @if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            <div class="alert error" role="alert">@errorMessage</div>
+                        }
+                        <button class="button primary full" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in") <span aria-hidden="true">→</span></button>
+                    </form>
+                    <button class="auth-switch" type="button" @onclick="ShowSignup">New worker? <strong>Create an account</strong></button>
+                    <div class="demo-box">
                     <div><strong>Demo accounts</strong><small>These accounts work on the demo server only.</small></div>
                     <button class="demo-choice" type="button" @onclick="UseAdminDemo"><span>Admin</span><b>Fill details</b></button>
                     <button class="demo-choice" type="button" @onclick="UseWorkerDemo"><span>Worker</span><b>Fill details</b></button>
-                </div>
+                    </div>
+                }
+                else
+                {
+                    <form class="login-form signup-form" @onsubmit="SignupAsync" @onsubmit:preventDefault="true">
+                        <label for="signup-employee-id">Employee ID</label>
+                        <input id="signup-employee-id" autocomplete="off" @bind="signupEmployeeId" placeholder="e.g. EMP-001" required maxlength="30" />
+                        <label for="signup-username">Choose a username</label>
+                        <input id="signup-username" autocomplete="username" @bind="signupUsername" placeholder="3–60 letters, numbers, . _ or -" required minlength="3" maxlength="60" />
+                        <label for="signup-password">Password</label>
+                        <input id="signup-password" type="password" autocomplete="new-password" @bind="signupPassword" placeholder="At least 10 characters" required minlength="10" maxlength="72" />
+                        <label for="signup-confirm">Confirm password</label>
+                        <input id="signup-confirm" type="password" autocomplete="new-password" @bind="signupConfirmPassword" placeholder="Enter the password again" required minlength="10" maxlength="72" />
+                        @if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            <div class="alert error" role="alert">@errorMessage</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(signupMessage))
+                        {
+                            <div class="alert success" role="status">@signupMessage</div>
+                        }
+                        <button class="button primary full" type="submit" disabled="@busy">@(busy ? "Submitting…" : "Request worker account") <span aria-hidden="true">→</span></button>
+                    </form>
+                    <button class="auth-switch" type="button" @onclick="ShowLogin">Already registered? <strong>Sign in</strong></button>
+                }
                 <p class="secure-note"><span>●</span> Connected to this website's attendance server</p>
             </div>
         </section>
@@ -74,6 +103,8 @@ else
             <button class="side-link @(activeView == "Dashboard" ? "active" : "")" @onclick='() => SelectView("Dashboard")'><span>◫</span>Dashboard</button>
             <button class="side-link @(activeView == "Employees" ? "active" : "")" @onclick='() => SelectView("Employees")'><span>♙</span>Employees</button>
             <button class="side-link @(activeView == "Attendance" ? "active" : "")" @onclick="OpenAttendanceAsync"><span>◷</span>Attendance</button>
+            <button class="side-link @(activeView == "Payroll" ? "active" : "")" @onclick="OpenPayrollAsync"><span>₱</span>Payroll</button>
+            <button class="side-link @(activeView == "User Access" ? "active" : "")" @onclick="OpenUserAccessAsync"><span>♙</span>User access</button>
         </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
         <main class="admin-main">
             <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
@@ -84,12 +115,44 @@ else
                     <div class="page-heading"><div><p class="eyebrow green">OVERVIEW</p><h1>Dashboard</h1><p class="muted">Attendance summary for @ShortDate(dashboard?.date ?? today).</p></div><button class="button outline" @onclick="LoadAdminAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
                     <section class="stat-grid"><article class="stat-card"><span>Active employees</span><strong>@(dashboard?.employees ?? 0)</strong><small>Employee records</small></article><article class="stat-card"><span>Present today</span><strong>@(dashboard?.present ?? 0)</strong><small>Time-in recorded</small></article><article class="stat-card"><span>Absent today</span><strong>@(dashboard?.absent ?? 0)</strong><small>Based on active employees</small></article><article class="stat-card"><span>Late today</span><strong>@(dashboard?.late ?? 0)</strong><small>Late arrivals</small></article></section>
                     <section class="panel table-panel"><div class="panel-heading"><div><h2>Latest attendance</h2><p class="muted">Today's latest employee scans</p></div><button class="text-button" @onclick="OpenAttendanceAsync">View attendance →</button></div>@AttendanceTable(dashboard?.latest ?? new List<AttendanceRecord>())</section>
-                    <section class="notice-card"><span class="notice-icon">✓</span><div><strong>Your system is ready</strong><p>Manage employees, review attendance, and let workers check their own workdays.</p></div></section>
+                    <section class="notice-card"><span class="notice-icon">@(connectedDevice is null ? "…" : connectedDevice.status == "ONLINE" ? "✓" : "!")</span><div><strong>Fingerprint device: @(connectedDevice?.status ?? "Not seen yet")</strong><p>@(connectedDevice?.lastSeen is { Length: > 0 } seen ? $"Last heartbeat: {FormatMoment(seen)}" : "Connect the ESP32 and check its Render API key; the device status updates on its heartbeat.") Payroll demo is available from the left menu.</p></div></section>
                 }
                 else if (activeView == "Employees")
                 {
                     <div class="page-heading"><div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Employee records linked to this attendance system.</p></div><button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
-                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">@employees.Count employee records</p></div><span class="record-count">EMPLOYEES</span></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th></tr></thead><tbody>@foreach (var employee in employees) { <tr><td><strong>@employee.fullName</strong></td><td>@employee.employeeId</td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td></tr> }</tbody></table></div></section>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th></tr></thead><tbody>@foreach (var employee in employees) { <tr><td><strong>@employee.fullName</strong></td><td>@employee.employeeId</td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@busy">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td></tr> }</tbody></table></div></section>
+                }
+                else if (activeView == "Payroll")
+                {
+                    <div class="page-heading"><div><p class="eyebrow green">PAY PERIOD</p><h1>Payroll</h1><p class="muted">Calculate pay from fingerprint attendance for the selected dates.</p></div><div class="date-toolbar payroll-toolbar"><label>From<input type="date" @bind="payrollFrom" /></label><label>To<input type="date" @bind="payrollTo" /></label><button class="button primary" @onclick="CalculatePayrollAsync" disabled="@busy">Calculate</button></div></div>
+                    <section class="notice-card payroll-note"><span class="notice-icon">₱</span><div><strong>Demo payroll calculation</strong><p>Gross pay = days with a time-in scan × daily rate. Demo deductions are ₱0; tax, SSS, PhilHealth, Pag-IBIG, overtime, and undertime are not calculated.</p></div></section>
+                    @if (payrollRows is not null)
+                    {
+                        <section class="stat-grid compact-stats payroll-stats"><article class="stat-card"><span>Employees</span><strong>@payrollRows.Count</strong><small>Active employees in this run</small></article><article class="stat-card"><span>Gross pay</span><strong>@Money(payrollRows.Sum(x => x.grossPay))</strong><small>Before deductions</small></article><article class="stat-card"><span>Net demo pay</span><strong>@Money(payrollRows.Sum(x => x.netPay))</strong><small>Equal to gross in this demo</small></article></section>
+                        <section class="panel table-panel"><div class="panel-heading"><div><h2>@(payrollSaved ? "Saved payroll run" : "Payroll preview")</h2><p class="muted">@ShortDate(payrollFrom) – @ShortDate(payrollTo) @(payrollSaved ? "• Saved; this period is locked" : "• Review the figures before saving")</p></div><div class="payroll-actions"><button class="button outline" @onclick="ExportPayrollAsync" disabled="@(payrollRows.Count == 0)">Export CSV</button><button class="button primary" @onclick="SavePayrollAsync" disabled="@(busy || payrollSaved || payrollRows.Count == 0)">@(payrollSaved ? "Run saved" : "Save payroll run")</button></div></div><div class="table-scroll"><table class="payroll-table"><thead><tr><th>Employee</th><th>Days present</th><th>Recorded absences</th><th>Late minutes</th><th>Daily rate</th><th>Gross pay</th><th>Deductions</th><th>Net demo pay</th>@if (!payrollSaved) { <th>Rate action</th> }</tr></thead><tbody>
+                            @if (payrollRows.Count == 0) { <tr><td colspan="9" class="empty-cell">No active employees were found for this payroll run.</td></tr> }
+                            @foreach (var row in payrollRows)
+                            {
+                                <tr><td><strong>@row.employeeName</strong><small>@row.employeeId</small></td><td>@row.daysPresent</td><td>@row.daysAbsent</td><td>@row.lateMinutes</td><td>@if (payrollSaved) { @Money(row.dailyRate) } else { <input aria-label="Daily rate for @row.employeeName" type="number" min="0" step="0.01" @bind="row.rateEdit" /> }</td><td><strong>@Money(row.grossPay)</strong></td><td>@Money(row.deductions)</td><td><strong>@Money(row.netPay)</strong></td>@if (!payrollSaved) { <td><button class="text-button" @onclick="() => SaveDailyRateAsync(row)" disabled="@busy">Save rate</button></td> }</tr>
+                            }
+                        </tbody><tfoot><tr><th colspan="5">TOTAL</th><th>@Money(payrollRows.Sum(x => x.grossPay))</th><th>@Money(payrollRows.Sum(x => x.deductions))</th><th>@Money(payrollRows.Sum(x => x.netPay))</th>@if (!payrollSaved) { <th></th> }</tr></tfoot></table></div></section>
+                        <p class="footnote">Saved runs cannot be changed. Render's current demo uses an in-memory H2 database, so saved payroll and attendance are cleared when the service restarts.</p>
+                    }
+                    else
+                    {
+                        <section class="panel empty-payroll"><strong>Choose a date range, then select Calculate.</strong><p class="muted">Payroll uses the attendance records and daily rates currently stored in the server.</p></section>
+                    }
+                }
+                else if (activeView == "User Access")
+                {
+                    <div class="page-heading"><div><p class="eyebrow green">ACCOUNT APPROVAL</p><h1>User access</h1><p class="muted">Review worker account requests and approve employees before they can sign in.</p></div><button class="button outline" @onclick="LoadUsersAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Worker accounts</h2><p class="muted">Only active employee records can request an account. Admin accounts cannot be created here.</p></div><span class="record-count">@users.Count(x => x.role == "EMPLOYEE" && !x.active) PENDING</span></div><div class="table-scroll"><table><thead><tr><th>Username</th><th>Employee ID</th><th>Role</th><th>Access status</th><th>Action</th></tr></thead><tbody>
+                        @if (users.Count == 0) { <tr><td colspan="5" class="empty-cell">No user accounts were returned by the server.</td></tr> }
+                        @foreach (var account in users.Where(x => x.role == "EMPLOYEE").OrderBy(x => x.active).ThenBy(x => x.username))
+                        {
+                            <tr><td><strong>@account.username</strong></td><td>@(account.employeeId ?? "—")</td><td>Worker</td><td><span class="status @(account.active ? "good" : "warning")">@(account.active ? "Approved" : "Pending approval")</span></td><td>@if (!account.active) { <button class="text-button" @onclick="() => ApproveUserAsync(account)" disabled="@busy">Approve account</button> } else { <span class="muted">—</span> }</td></tr>
+                        }
+                        </tbody></table></div></section>
                 }
                 else
                 {
@@ -107,23 +170,76 @@ else
     private bool isSignedIn;
     private bool isWorker;
     private bool busy;
+    private bool showSignup;
     private string username = "";
     private string password = "";
+    private string signupEmployeeId = "";
+    private string signupUsername = "";
+    private string signupPassword = "";
+    private string signupConfirmPassword = "";
+    private string signupMessage = "";
     private string errorMessage = "";
     private string activeView = "Dashboard";
     private string today = DateTime.Now.ToString("yyyy-MM-dd");
     private DateTime fromDate = DateTime.Today.AddDays(-4);
     private DateTime toDate = DateTime.Today;
     private DateTime attendanceDate = DateTime.Today;
+    private DateTime payrollFrom = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime payrollTo = DateTime.Today;
     private string lastUpdated = "—";
     private DashboardSummary? dashboard;
     private List<EmployeeRecord> employees = new();
+    private List<UserAccountRecord> users = new();
     private List<AttendanceRecord> attendanceRows = new();
     private WorkerProfile? worker;
     private WorkerAttendance? workerAttendance;
+    private List<PayrollRow>? payrollRows;
+    private bool payrollSaved;
+    private Dictionary<string, string> enrollmentMessages = new();
+    private DeviceStatusRecord? connectedDevice;
 
+    private void ShowSignup() { showSignup = true; errorMessage = ""; signupMessage = ""; }
+    private void ShowLogin() { showSignup = false; errorMessage = ""; signupMessage = ""; }
     private void UseAdminDemo() { username = "admin"; password = "DemoAdmin2026!"; errorMessage = ""; }
     private void UseWorkerDemo() { username = "demo-worker-one"; password = "DemoWorker2026!"; errorMessage = ""; }
+
+    private async Task SignupAsync()
+    {
+        if (busy) return;
+        busy = true;
+        errorMessage = "";
+        signupMessage = "";
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/auth/signup", new
+            {
+                employeeId = signupEmployeeId.Trim(),
+                username = signupUsername.Trim(),
+                password = signupPassword,
+                confirmPassword = signupConfirmPassword
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = await ReadServerErrorAsync(response);
+                return;
+            }
+            var result = await response.Content.ReadFromJsonAsync<SignupResult>();
+            signupMessage = result?.message ?? "Signup received. Ask the Admin to approve your account before signing in.";
+            signupEmployeeId = "";
+            signupUsername = "";
+            signupPassword = "";
+            signupConfirmPassword = "";
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The attendance server did not respond. Wait a moment and submit again.";
+        }
+        catch (Exception)
+        {
+            errorMessage = "Signup could not be submitted. Check the details and try again.";
+        }
+        finally { busy = false; }
+    }
 
     private async Task LoginAsync()
     {
@@ -175,6 +291,12 @@ else
             dashboard = await Http.GetFromJsonAsync<DashboardSummary>("api/dashboard");
             await LoadEmployeesAsync();
             if (dashboard is not null) attendanceRows = dashboard.latest;
+            try
+            {
+                var deviceRows = await Http.GetFromJsonAsync<List<DeviceStatusRecord>>("api/device/status") ?? new();
+                connectedDevice = deviceRows.FirstOrDefault(x => x.status == "ONLINE") ?? deviceRows.FirstOrDefault();
+            }
+            catch (HttpRequestException) { connectedDevice = null; }
         }
         catch (HttpRequestException) { errorMessage = "We could not load the admin dashboard. Refresh the page data or sign in again."; }
     }
@@ -189,11 +311,84 @@ else
         catch (HttpRequestException) { errorMessage = "Employee records could not be loaded from the server."; }
     }
 
+    private async Task OpenUserAccessAsync()
+    {
+        activeView = "User Access";
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        errorMessage = "";
+        try { users = await Http.GetFromJsonAsync<List<UserAccountRecord>>("api/users") ?? new(); }
+        catch (HttpRequestException) { errorMessage = "User accounts could not be loaded. Check your Admin sign-in and server connection."; }
+    }
+
+    private async Task ApproveUserAsync(UserAccountRecord account)
+    {
+        if (busy || account.active || string.IsNullOrWhiteSpace(account.employeeId)) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.PutAsJsonAsync($"api/users/{account.id}", new
+            {
+                username = account.username,
+                role = "EMPLOYEE",
+                employeeId = account.employeeId,
+                active = true,
+                password = (string?)null
+            });
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            await LoadUsersAsync();
+        }
+        catch (HttpRequestException) { errorMessage = "The account could not be approved. Check the server connection and try again."; }
+        finally { busy = false; }
+    }
+
     private async Task OpenAttendanceAsync()
     {
         activeView = "Attendance";
         attendanceDate = DateTime.Today;
         await LoadAttendanceAsync();
+    }
+
+    private async Task StartEnrollmentAsync(EmployeeRecord employee)
+    {
+        if (busy) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.PostAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}/enroll", null);
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            enrollmentMessages[employee.employeeId] = "Queued. Keep device online; scan this employee's finger twice.";
+        }
+        catch (HttpRequestException) { errorMessage = "Could not send enrollment to the device. Check the API connection."; }
+        finally { busy = false; }
+    }
+
+    private async Task CheckEnrollmentAsync(EmployeeRecord employee)
+    {
+        if (busy) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            var command = await Http.GetFromJsonAsync<EnrollmentCommand>($"api/employees/{Uri.EscapeDataString(employee.employeeId)}/enrollment-status");
+            await LoadEmployeesAsync();
+            var refreshedEmployee = employees.FirstOrDefault(x => x.employeeId == employee.employeeId) ?? employee;
+            enrollmentMessages[employee.employeeId] = command?.status switch
+            {
+                "PENDING" => "Waiting for ESP32. Check device Wi-Fi and API key.",
+                "SENT" => "Device received command. Scan the same finger twice now.",
+                "SUCCESS" => $"Enrolled successfully in fingerprint slot {refreshedEmployee.sensorSlotId}.",
+                "FAILED" => command.resultMessage ?? "Enrollment failed. Start again.",
+                _ => "No enrollment command is available. Start enrollment first."
+            };
+        }
+        catch (HttpRequestException) { enrollmentMessages[employee.employeeId] = "No status yet. Start enrollment and check the device connection."; }
+        finally { busy = false; }
     }
 
     private async Task LoadAttendanceAsync()
@@ -202,6 +397,86 @@ else
         try { attendanceRows = await Http.GetFromJsonAsync<List<AttendanceRecord>>($"api/attendance?date={attendanceDate:yyyy-MM-dd}") ?? new(); }
         catch (HttpRequestException) { errorMessage = "Attendance records could not be loaded. Try refreshing or sign in again."; }
     }
+
+    private async Task OpenPayrollAsync()
+    {
+        activeView = "Payroll";
+        payrollRows = null;
+        await CalculatePayrollAsync();
+    }
+
+    private async Task CalculatePayrollAsync()
+    {
+        errorMessage = "";
+        if (payrollTo.Date < payrollFrom.Date)
+        {
+            errorMessage = "The end date must be on or after the start date.";
+            return;
+        }
+        busy = true;
+        try
+        {
+            var preview = await Http.GetFromJsonAsync<List<PayrollRow>>($"api/reports/payroll?from={payrollFrom:yyyy-MM-dd}&to={payrollTo:yyyy-MM-dd}") ?? new();
+            var saved = await Http.GetFromJsonAsync<PayrollRunResponse>($"api/payroll/run?from={payrollFrom:yyyy-MM-dd}&to={payrollTo:yyyy-MM-dd}");
+            payrollSaved = saved?.saved == true;
+            payrollRows = payrollSaved ? (saved?.rows ?? new()) : preview;
+            foreach (var row in payrollRows) row.rateEdit = row.dailyRate;
+        }
+        catch (HttpRequestException) { errorMessage = "Payroll could not be loaded. Wait for Render to wake, then calculate again."; }
+        finally { busy = false; }
+    }
+
+    private async Task SavePayrollAsync()
+    {
+        if (payrollRows is null || payrollRows.Count == 0 || busy) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/payroll/run", new PayrollPeriodRequest { from = payrollFrom.ToString("yyyy-MM-dd"), to = payrollTo.ToString("yyyy-MM-dd") });
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            var saved = await response.Content.ReadFromJsonAsync<PayrollRunResponse>();
+            if (saved is null) { errorMessage = "The server did not return the saved payroll run."; return; }
+            payrollRows = saved.rows;
+            payrollSaved = saved.saved;
+        }
+        catch (HttpRequestException) { errorMessage = "The payroll run could not be saved. Check the connection and retry."; }
+        finally { busy = false; }
+    }
+
+    private async Task SaveDailyRateAsync(PayrollRow row)
+    {
+        var employee = employees.FirstOrDefault(x => x.employeeId == row.employeeId);
+        if (employee is null || row.rateEdit < 0 || busy) { errorMessage = "Enter a valid non-negative daily rate."; return; }
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.PutAsJsonAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}", new
+            {
+                employee.employeeId, employee.fullName, employee.position, employee.contactNumber, employee.address,
+                dailyRate = row.rateEdit
+            });
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            employee.dailyRate = row.rateEdit;
+            await CalculatePayrollAsync();
+        }
+        catch (HttpRequestException) { errorMessage = "The daily rate could not be saved."; }
+        finally { busy = false; }
+    }
+
+    private async Task ExportPayrollAsync()
+    {
+        if (payrollRows is null || payrollRows.Count == 0) return;
+        var csv = new System.Text.StringBuilder("Employee ID,Employee,Days Present,Recorded Absences,Late Minutes,Daily Rate,Gross Pay,Deductions,Net Demo Pay\r\n");
+        foreach (var row in payrollRows)
+            csv.AppendJoin(',', Csv(row.employeeId), Csv(row.employeeName), row.daysPresent, row.daysAbsent, row.lateMinutes,
+                row.dailyRate.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.grossPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.deductions.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.netPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
+        await JS.InvokeVoidAsync("mecky.downloadText", $"payroll-{payrollFrom:yyyyMMdd}-{payrollTo:yyyyMMdd}.csv", csv.ToString(), "text/csv;charset=utf-8");
+    }
+
+    private static string Csv(string value) => "\"" + (value ?? "").Replace("\"", "\"\"") + "\"";
+    private static string Money(decimal value) => "₱" + value.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("en-PH"));
 
     private async Task LoadWorkerAsync()
     {
@@ -240,8 +515,8 @@ else
     private void SignOut()
     {
         Http.DefaultRequestHeaders.Authorization = null;
-        isSignedIn = false; isWorker = false; username = ""; password = ""; errorMessage = "";
-        worker = null; workerAttendance = null; dashboard = null; employees.Clear(); attendanceRows.Clear();
+        isSignedIn = false; isWorker = false; showSignup = false; username = ""; password = ""; signupEmployeeId = ""; signupUsername = ""; signupPassword = ""; signupConfirmPassword = ""; signupMessage = ""; errorMessage = "";
+        worker = null; workerAttendance = null; dashboard = null; payrollRows = null; payrollSaved = false; connectedDevice = null; enrollmentMessages.Clear(); employees.Clear(); users.Clear(); attendanceRows.Clear();
     }
 
     private void SelectView(string view) { activeView = view; errorMessage = ""; }
@@ -258,19 +533,24 @@ else
     }
     private static string StatusClass(string? value) => value?.ToUpperInvariant() switch { "PRESENT" or "TIME_OUT" => "good", "LATE" => "warning", "ABSENT" => "bad", "NO_RECORD" or "NOT_STARTED" => "neutral", _ => "neutral" };
 
-    private sealed class LoginResult { public string token { get; set; } = ""; public string role { get; set; } = ""; public string username { get; set; } = ""; }
-    private sealed class DashboardSummary { public string date { get; set; } = ""; public int employees { get; set; } public int present { get; set; } public int late { get; set; } public int absent { get; set; } public List<AttendanceRecord> latest { get; set; } = new(); }
-    private sealed class EmployeePage { public List<EmployeeRecord> content { get; set; } = new(); }
-    private sealed class EmployeeRecord { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } public int? sensorSlotId { get; set; } }
-    private sealed class AttendanceRecord { public long id { get; set; } public EmployeeRecord employee { get; set; } = new(); public string attendanceDate { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public string status { get; set; } = ""; public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } }
-    private sealed class WorkerProfile { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } }
-    private sealed class WorkerAttendance { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string from { get; set; } = ""; public string to { get; set; } = ""; public List<WorkerDay> days { get; set; } = new(); public int daysWorked { get; set; } public int daysAbsent { get; set; } }
-    private sealed class WorkerDay { public string date { get; set; } = ""; public bool scheduled { get; set; } public string status { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } public string? absenceReason { get; set; } }
-}
-
-@code {
     private RenderFragment AttendanceTable(List<AttendanceRecord> Rows) => @<div class="table-scroll"><table><thead><tr><th>Employee</th><th>Time in</th><th>Time out</th><th>Status</th><th>Late</th><th>Hours</th></tr></thead><tbody>
         @if (Rows.Count == 0) { <tr><td colspan="6" class="empty-cell">No attendance records for this date.</td></tr> }
         @foreach (var row in Rows) { <tr><td><strong>@row.employee.fullName</strong><small>@row.employee.employeeId</small></td><td>@FormatMoment(row.timeIn)</td><td>@FormatMoment(row.timeOut)</td><td><span class="status @StatusClass(row.status)">@PrettyStatus(row.status)</span></td><td>@row.lateMinutes min</td><td>@row.hoursWorked.ToString("0.00")</td></tr> }
     </tbody></table></div>;
+
+    private sealed class LoginResult { public string token { get; set; } = ""; public string role { get; set; } = ""; public string username { get; set; } = ""; }
+    private sealed class SignupResult { public string status { get; set; } = ""; public string message { get; set; } = ""; }
+    private sealed class DashboardSummary { public string date { get; set; } = ""; public int employees { get; set; } public int present { get; set; } public int late { get; set; } public int absent { get; set; } public List<AttendanceRecord> latest { get; set; } = new(); }
+    private sealed class EmployeePage { public List<EmployeeRecord> content { get; set; } = new(); }
+    private sealed class UserAccountRecord { public long id { get; set; } public string username { get; set; } = ""; public string role { get; set; } = ""; public string? employeeId { get; set; } public bool active { get; set; } }
+    private sealed class EmployeeRecord { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } public string? contactNumber { get; set; } public string? address { get; set; } public decimal dailyRate { get; set; } public int? sensorSlotId { get; set; } }
+    private sealed class PayrollRow { public string employeeId { get; set; } = ""; public string employeeName { get; set; } = ""; public int daysPresent { get; set; } public int daysAbsent { get; set; } public int lateMinutes { get; set; } public decimal dailyRate { get; set; } public decimal rateEdit { get; set; } public decimal grossPay { get; set; } public decimal deductions { get; set; } public decimal netPay { get; set; } }
+    private sealed class PayrollRunResponse { public string from { get; set; } = ""; public string to { get; set; } = ""; public bool saved { get; set; } public List<PayrollRow> rows { get; set; } = new(); }
+    private sealed class PayrollPeriodRequest { public string from { get; set; } = ""; public string to { get; set; } = ""; }
+    private sealed class EnrollmentCommand { public long id { get; set; } public string status { get; set; } = ""; public string? resultMessage { get; set; } }
+    private sealed class DeviceStatusRecord { public string name { get; set; } = ""; public string status { get; set; } = "OFFLINE"; public string lastSeen { get; set; } = ""; }
+    private sealed class AttendanceRecord { public long id { get; set; } public EmployeeRecord employee { get; set; } = new(); public string attendanceDate { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public string status { get; set; } = ""; public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } }
+    private sealed class WorkerProfile { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } }
+    private sealed class WorkerAttendance { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string from { get; set; } = ""; public string to { get; set; } = ""; public List<WorkerDay> days { get; set; } = new(); public int daysWorked { get; set; } public int daysAbsent { get; set; } }
+    private sealed class WorkerDay { public string date { get; set; } = ""; public bool scheduled { get; set; } public string status { get; set; } = ""; public string? timeIn { get; set; } public string? timeOut { get; set; } public int lateMinutes { get; set; } public decimal hoursWorked { get; set; } public string? absenceReason { get; set; } }
 }

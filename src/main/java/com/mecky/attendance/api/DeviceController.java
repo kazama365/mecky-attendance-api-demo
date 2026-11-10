@@ -17,6 +17,9 @@ import java.util.*;
  @PostMapping("/heartbeat") public Object heartbeat(@RequestHeader(value="X-Device-Key",required=false) String k,@RequestBody(required=false) Map<String,String> body){
   auth(k);String name=body==null?"ESP32-01":body.getOrDefault("device","ESP32-01");String hash=sha256(key);Device d=devices.findByName(name).orElseGet(()->new Device(name,hash));d.apiKeyHash=hash;d.status="ONLINE";d.lastSeen=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Manila"));devices.save(d);ws.publish("{\"type\":\"device.status\",\"name\":\""+name+"\",\"status\":\"ONLINE\"}");return Map.of("status","ONLINE","lastSeen",d.lastSeen);
  }
+ @GetMapping("/status") @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')") public Object status(){
+  return devices.findAll().stream().map(d->Map.of("name",d.name,"status",d.status,"lastSeen",d.lastSeen==null?"":d.lastSeen.toString())).toList();
+ }
  private static String sha256(String value){try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
  @GetMapping("/command") public Object command(@RequestHeader(value="X-Device-Key",required=false) String k){auth(k);return commands.findFirstByStatusOrderByCreatedAtAsc("PENDING").map(c->{c.status="SENT";commands.save(c);return Map.of("id",c.id,"type",c.type,"employeeId",c.employeeId);}).orElseGet(()->Map.of("type","NONE"));}
  @PostMapping("/enroll-result") public Object result(@RequestHeader(value="X-Device-Key",required=false) String k,@Valid @RequestBody EnrollmentResult r){

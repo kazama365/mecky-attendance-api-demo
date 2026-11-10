@@ -16,8 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
  @PostMapping("/login") public ResponseEntity<?> login(@Valid @RequestBody LoginRequest r,HttpServletRequest request){
   String key=request.getRemoteAddr()+":"+r.username().toLowerCase(java.util.Locale.ROOT);Instant now=Instant.now();
   if(isLocked(key,now))return ResponseEntity.status(429).body(java.util.Map.of("error","Too many failed login attempts. Try again in 10 minutes."));
-  var u=users.findByUsername(r.username()).filter(x->x.active&&passwords.matches(r.password(),x.passwordHash));
-  if(u.isPresent()){failedAttempts.remove(key);var x=u.get();return ResponseEntity.ok(new LoginResponse(jwt.issue(x.username,x.role),x.role,x.username));}
+  var u=users.findByUsernameIgnoreCase(r.username().trim()).filter(x->passwords.matches(r.password(),x.passwordHash));
+  if(u.isPresent()){
+   failedAttempts.remove(key);var x=u.get();
+   if(!x.active)return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of("error","Your account is waiting for admin approval."));
+   return ResponseEntity.ok(new LoginResponse(jwt.issue(x.username,x.role),x.role,x.username));
+  }
   registerFailure(key,now);return ResponseEntity.status(401).body(java.util.Map.of("error","Invalid username or password"));
  }
  @PostMapping("/logout") public void logout(){}

@@ -7,21 +7,24 @@
     <meta name="description" content="Mecky's attendance management portal" />
     <title>Mecky's Attendance</title>
     <base href="/" />
-    <script type="importmap"></script>
     <link rel="stylesheet" href="css/app.css" />
+    <script type="importmap"></script>
 </head>
 <body>
-    <div id="app">
-        <div class="loading-screen">
-            <div class="brand-mark">M</div>
-            <span>Loading attendance portal…</span>
-        </div>
-    </div>
-    <div id="blazor-error-ui">
-        A page error occurred.
-        <a href="." class="reload">Reload</a>
-        <span class="dismiss">×</span>
-    </div>
+    <div id="app"><div class="loading-screen"><div class="brand-mark">M</div><span>Loading attendance portal…</span></div></div>
+    <div id="blazor-error-ui">A page error occurred. <a href="." class="reload">Reload</a><span class="dismiss">×</span></div>
+    <script>
+        window.mecky = window.mecky || {};
+        window.mecky.downloadText = (fileName, text, contentType) => {
+            const blob = new Blob([text], { type: contentType || "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(url);
+        };
+    </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 </html>

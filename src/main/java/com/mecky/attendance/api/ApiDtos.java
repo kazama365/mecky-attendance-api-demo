@@ -8,7 +8,7 @@ public final class ApiDtos {
  private ApiDtos(){}
  public record LoginRequest(@NotBlank String username,@NotBlank String password){}
  public record LoginResponse(String token,String role,String username){}
- public record EmployeeRequest(@NotBlank String employeeId,@NotBlank String fullName,String position,String contactNumber,String address,BigDecimal dailyRate){}
+ public record EmployeeRequest(@NotBlank String employeeId,@NotBlank String fullName,String position,String contactNumber,String address,@jakarta.validation.constraints.DecimalMin("0.00") BigDecimal dailyRate){}
  public record Scan(@NotBlank String scanUuid,@Min(0) int slotId,@NotNull LocalDateTime timestamp){}
  public record ScanBatch(@NotEmpty List<@Valid Scan> scans){}
  public record ScanResult(String scanUuid,String status,String employeeId,String employeeName,String message){}
