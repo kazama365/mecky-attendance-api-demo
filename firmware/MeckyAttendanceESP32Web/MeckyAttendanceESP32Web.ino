@@ -269,7 +269,9 @@ int findFreeSlot() {
   finger.getTemplateCount();
   const int capacity = finger.capacity > 0 ? min((int)finger.capacity, (int)SENSOR_CAPACITY) : SENSOR_CAPACITY;
   for (int slot = 1; slot <= capacity; ++slot) {
-    if (finger.loadModel(slot) != FINGERPRINT_OK) return slot;
+    const uint8_t status = finger.loadModel(slot);
+    if (status == FINGERPRINT_PACKETRECIEVEERR) return -1;
+    if (status != FINGERPRINT_OK) return slot;
   }
   return -1;
 }
@@ -329,11 +331,13 @@ void enrollFromCommand(long commandId) {
     }
   }
 
-  reportEnrollment(commandId, success, slot,
+  const bool reported = reportEnrollment(commandId, success, slot,
                    success ? "Fingerprint enrolled" : "Enrollment timed out or scans did not match");
   if (success) {
-    showScreen("ENROLLED", "Slot " + String(slot));
-    Serial.printf("Enrollment successful. Sensor slot %d linked to employee by API.\n", slot);
+    showScreen(reported ? "ENROLLED" : "SAVED LOCALLY",
+               reported ? "Slot " + String(slot) : "Waiting for server");
+    Serial.printf("Fingerprint stored in slot %d. Server link %s.\n", slot,
+                  reported ? "confirmed" : "pending");
   } else {
     showScreen("ENROLL FAILED", "Try again from site");
     Serial.println("Enrollment failed; start a new enrollment from the admin website.");
@@ -342,6 +346,7 @@ void enrollFromCommand(long commandId) {
 }
 
 void pollForEnrollmentCommand() {
+  if (LittleFS.exists(ENROLL_RESULT_FILE)) return;
   String response;
   if (!serverGet("/api/device/command", response)) return;
   JsonDocument command;
