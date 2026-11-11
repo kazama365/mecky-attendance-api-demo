@@ -38,7 +38,10 @@
                         }
                         <button class="button primary full" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in") <span aria-hidden="true">→</span></button>
                     </form>
-                    <button class="auth-switch" type="button" @onclick="ShowSignup">New worker? <strong>Create an account</strong></button>
+                    <div class="signup-callout">
+                        <div><strong>New worker?</strong><small>Get your Employee ID from the admin to request access.</small></div>
+                        <button class="button outline" type="button" @onclick="ShowSignup">Sign up</button>
+                    </div>
                     <div class="demo-box">
                     <div><strong>Demo accounts</strong><small>These accounts work on the demo server only.</small></div>
                     <button class="demo-choice" type="button" @onclick="UseAdminDemo"><span>Admin</span><b>Fill details</b></button>
@@ -47,6 +50,7 @@
                 }
                 else
                 {
+                    <ol class="signup-steps"><li>Get your Employee ID from the admin.</li><li>Submit this form and wait for account approval.</li><li>Ask the admin to start fingerprint enrollment, then scan twice when the device prompts you.</li></ol>
                     <form class="login-form signup-form" @onsubmit="SignupAsync" @onsubmit:preventDefault="true">
                         <label for="signup-employee-id">Employee ID</label>
                         <input id="signup-employee-id" autocomplete="off" @bind="signupEmployeeId" placeholder="e.g. EMP-001" required maxlength="30" />
@@ -119,7 +123,34 @@ else
                 }
                 else if (activeView == "Employees")
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Employee records linked to this attendance system.</p></div><button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <div class="page-heading">
+                        <div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Manage employee records and fingerprint enrollment.</p></div>
+                        <div class="employee-actions">
+                            <button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">Refresh</button>
+                            <button class="button primary" @onclick="OpenEmployeeForm" disabled="@busy">Add employee</button>
+                        </div>
+                    </div>
+                    @if (employeeNotice.Length > 0)
+                    {
+                        <div class="alert success" role="status">@employeeNotice</div>
+                    }
+                    @if (showEmployeeForm)
+                    {
+                        <section class="panel employee-editor" aria-labelledby="employee-form-title">
+                            <h2 id="employee-form-title">Add an employee</h2>
+                            <p class="muted">Share this Employee ID with the worker after saving.</p>
+                            <form class="employee-fields" @onsubmit="CreateEmployeeAsync" @onsubmit:preventDefault="true">
+                                <label>Employee ID<input @bind="newEmployeeId" placeholder="EMP-004" required maxlength="30" /></label>
+                                <label>Full name<input @bind="newEmployeeName" required maxlength="120" /></label>
+                                <label>Position<input @bind="newEmployeePosition" maxlength="80" /></label>
+                                <label>Daily rate (PHP)<input type="number" min="0" max="99999999.99" step="0.01" @bind="newEmployeeRate" required /></label>
+                                <div class="employee-actions">
+                                    <button class="button primary" type="submit" disabled="@busy">Save employee</button>
+                                    <button class="button outline" type="button" @onclick="CloseEmployeeForm" disabled="@busy">Cancel</button>
+                                </div>
+                            </form>
+                        </section>
+                    }
                     <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th></tr></thead><tbody>@foreach (var employee in employees) { <tr><td><strong>@employee.fullName</strong></td><td>@employee.employeeId</td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@busy">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td></tr> }</tbody></table></div></section>
                 }
                 else if (activeView == "Payroll")
@@ -171,6 +202,12 @@ else
     private bool isWorker;
     private bool busy;
     private bool showSignup;
+    private bool showEmployeeForm;
+    private string newEmployeeId = "";
+    private string newEmployeeName = "";
+    private string newEmployeePosition = "";
+    private decimal newEmployeeRate;
+    private string employeeNotice = "";
     private string username = "";
     private string password = "";
     private string signupEmployeeId = "";
@@ -299,6 +336,44 @@ else
             catch (HttpRequestException) { connectedDevice = null; }
         }
         catch (HttpRequestException) { errorMessage = "We could not load the admin dashboard. Refresh the page data or sign in again."; }
+    }
+
+    private void OpenEmployeeForm()
+    {
+        employeeNotice = "";
+        errorMessage = "";
+        showEmployeeForm = true;
+    }
+
+    private void CloseEmployeeForm()
+    {
+        showEmployeeForm = false;
+        newEmployeeId = newEmployeeName = newEmployeePosition = "";
+        newEmployeeRate = 0;
+    }
+
+    private async Task CreateEmployeeAsync()
+    {
+        if (busy) return;
+        busy = true;
+        errorMessage = "";
+        var id = newEmployeeId.Trim();
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/employees", new
+            {
+                employeeId = id,
+                fullName = newEmployeeName.Trim(),
+                position = newEmployeePosition.Trim(),
+                dailyRate = newEmployeeRate
+            });
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            CloseEmployeeForm();
+            employeeNotice = $"Employee {id} saved. Share this ID for signup, or select Start enrollment to link a fingerprint.";
+            await LoadEmployeesAsync();
+        }
+        catch (HttpRequestException) { errorMessage = "Could not save the employee. Refresh the list before trying again."; }
+        finally { busy = false; }
     }
 
     private async Task LoadEmployeesAsync()
@@ -516,6 +591,8 @@ else
     {
         Http.DefaultRequestHeaders.Authorization = null;
         isSignedIn = false; isWorker = false; showSignup = false; username = ""; password = ""; signupEmployeeId = ""; signupUsername = ""; signupPassword = ""; signupConfirmPassword = ""; signupMessage = ""; errorMessage = "";
+        CloseEmployeeForm();
+        employeeNotice = "";
         worker = null; workerAttendance = null; dashboard = null; payrollRows = null; payrollSaved = false; connectedDevice = null; enrollmentMessages.Clear(); employees.Clear(); users.Clear(); attendanceRows.Clear();
     }
 
