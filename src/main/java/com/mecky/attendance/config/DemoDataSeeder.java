@@ -49,12 +49,13 @@ public class DemoDataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Employee ana = employee("DEMO-001", "Ana Santos", "Production Operator", "620.00", "0001");
-        Employee marco = employee("DEMO-002", "Marco Reyes", "Warehouse Associate", "650.00", "0002");
-        Employee liza = employee("DEMO-003", "Liza Cruz", "Quality Checker", "700.00", "0003");
-        employees.saveAll(List.of(ana, marco, liza));
+        Employee ana = employee("DEMO-001", "Paloma Palada", "Production Operator", "620.00", "0001");
+        Employee marco = employee("DEMO-002", "Regine Fe Benito", "Warehouse Associate", "650.00", "0002");
+        Employee liza = employee("DEMO-003", "JM Soriano", "Quality Checker", "700.00", "0003");
+        Employee wayne = employee("DEMO-004", "Wayne Tugas", "Demo Employee", "650.00", "0004");
+        employees.saveAll(List.of(ana, marco, liza, wayne));
 
-        for (Employee employee : List.of(ana, marco, liza)) {
+        for (Employee employee : List.of(ana, marco, liza, wayne)) {
             WorkSchedule schedule = new WorkSchedule(employee.employeeId);
             schedule.workingDays = "MON,TUE,WED,THU,FRI";
             schedule.expectedTimeIn = LocalTime.of(9, 0);
@@ -63,7 +64,7 @@ public class DemoDataSeeder implements CommandLineRunner {
             schedules.save(schedule);
         }
 
-        seedRecentAttendance(ana, marco, liza);
+        seedRecentAttendance(ana, marco, liza, wayne);
         users.save(new AppUser("admin", passwords.encode("DemoAdmin2026!"), "ADMIN"));
         users.save(worker("demo-worker-one", "DemoWorker2026!", ana.employeeId));
         users.save(worker("demo-worker-two", "DemoWorker22026!", marco.employeeId));
@@ -87,19 +88,18 @@ public class DemoDataSeeder implements CommandLineRunner {
         return user;
     }
 
-    private void seedRecentAttendance(Employee ana, Employee marco, Employee liza) {
+    private void seedRecentAttendance(Employee ana, Employee marco, Employee liza, Employee wayne) {
         LocalDate today = LocalDate.now(MANILA);
         LocalDateTime now = LocalDateTime.now(MANILA);
         for (int daysAgo = 4; daysAgo >= 0; daysAgo--) {
             LocalDate day = today.minusDays(daysAgo);
-            if (day.getDayOfWeek().getValue() > 5) continue;
+            if (day.getDayOfWeek().getValue() > 5 && !day.equals(today)) continue;
 
             seedAttendance(ana, day, today, now, 8, 55, 17, 0);
             seedAttendance(marco, day, today, now, 9, 17, 17, 5);
+            seedAttendance(wayne, day, today, now, 8, 57, 17, 0);
 
-            if (day.equals(today)) {
-                absences.save(new Absence(liza, day, "Sick", "Sample absence for the demo", "admin"));
-            } else if (day.getDayOfWeek().getValue() == 3 && daysAgo < 4) {
+            if (!day.equals(today) && day.getDayOfWeek().getValue() == 3 && daysAgo < 4) {
                 absences.save(new Absence(liza, day, "Leave", "Sample approved leave", "admin"));
             } else {
                 seedAttendance(liza, day, today, now, 8, 58, 17, 2);
