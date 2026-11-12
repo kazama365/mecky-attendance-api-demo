@@ -105,10 +105,10 @@ else
     <div class="admin-shell">
         <aside class="sidebar"><a class="wordmark side-wordmark" href="/"><span class="brand-mark">M</span><span>MECKY'S<small>CEO / ADMIN</small></span></a><div class="side-label">WORKSPACE</div><nav>
             <button class="side-link @(activeView == "Dashboard" ? "active" : "")" @onclick='() => SelectView("Dashboard")'><span>◫</span>Dashboard</button>
-            <button class="side-link @(activeView == "Employees" ? "active" : "")" @onclick='() => SelectView("Employees")'><span>♙</span>Employees</button>
+            <button class="side-link @(activeView == "Employees" ? "active" : "")" @onclick="OpenEmployeesAsync"><span>♙</span>Employees</button>
             <button class="side-link @(activeView == "Attendance" ? "active" : "")" @onclick="OpenAttendanceAsync"><span>◷</span>Attendance</button>
             <button class="side-link @(activeView == "Payroll" ? "active" : "")" @onclick="OpenPayrollAsync"><span>₱</span>Payroll</button>
-            <button class="side-link @(activeView == "User Access" ? "active" : "")" @onclick="OpenUserAccessAsync"><span>♙</span>User access</button>
+            <button class="side-link @(activeView == "User Access" ? "active" : "")" @onclick="OpenUserAccessAsync"><span>♙</span>Account approvals</button>
         </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
         <main class="admin-main">
             <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
@@ -127,6 +127,7 @@ else
                         <div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Manage employee records and fingerprint enrollment.</p></div>
                         <div class="employee-actions">
                             <button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">Refresh</button>
+                            <button class="button outline" @onclick="OpenUserAccessAsync">Account approvals</button>
                             <button class="button primary" @onclick="OpenEmployeeForm" disabled="@busy">Add employee</button>
                         </div>
                     </div>
@@ -134,13 +135,24 @@ else
                     {
                         <div class="alert success" role="status">@employeeNotice</div>
                     }
+                    @if (employeeToDeactivate is { } selectedEmployee)
+                    {
+                        <section class="panel employee-editor deactivate-confirm" aria-labelledby="deactivate-title">
+                            <h2 id="deactivate-title">Deactivate @selectedEmployee.fullName?</h2>
+                            <p class="muted">This removes the employee from the active list and preserves their attendance history.</p>
+                            <div class="employee-actions">
+                                <button class="button danger" @onclick="DeactivateEmployeeAsync" disabled="@busy">Confirm deactivation</button>
+                                <button class="button outline" @onclick="CancelDeactivation" disabled="@busy">Cancel</button>
+                            </div>
+                        </section>
+                    }
                     @if (showEmployeeForm)
                     {
                         <section class="panel employee-editor" aria-labelledby="employee-form-title">
                             <h2 id="employee-form-title">Add an employee</h2>
                             <p class="muted">Share this Employee ID with the worker after saving.</p>
                             <form class="employee-fields" @onsubmit="CreateEmployeeAsync" @onsubmit:preventDefault="true">
-                                <label>Employee ID<input @bind="newEmployeeId" placeholder="EMP-004" required maxlength="30" /></label>
+                                <label>Employee ID<input @bind="newEmployeeId" placeholder="EMP-005" required maxlength="30" /></label>
                                 <label>Full name<input @bind="newEmployeeName" required maxlength="120" /></label>
                                 <label>Position<input @bind="newEmployeePosition" maxlength="80" /></label>
                                 <label>Daily rate (PHP)<input type="number" min="0" max="99999999.99" step="0.01" @bind="newEmployeeRate" required /></label>
@@ -151,7 +163,7 @@ else
                             </form>
                         </section>
                     }
-                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th></tr></thead><tbody>@foreach (var employee in employees) { <tr><td><strong>@employee.fullName</strong></td><td>@employee.employeeId</td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@busy">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td></tr> }</tbody></table></div></section>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table class="employees-table"><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th><th>Manage</th></tr></thead><tbody>@if (employees.Count == 0) { <tr><td colspan="7" class="empty-cell">No active employees. Select Add employee to get started.</td></tr> } @foreach (var employee in employees) { <tr><td><div class="employee-name"><span class="employee-initials" aria-hidden="true">@Initials(employee.fullName)</span><strong>@employee.fullName</strong></div></td><td><span class="employee-id">@employee.employeeId</span></td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@busy">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td><td><button class="text-button danger-text" @onclick="() => AskDeactivate(employee)" disabled="@busy">Deactivate</button></td></tr> }</tbody></table></div></section>
                 }
                 else if (activeView == "Payroll")
                 {
@@ -176,12 +188,16 @@ else
                 }
                 else if (activeView == "User Access")
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">ACCOUNT APPROVAL</p><h1>User access</h1><p class="muted">Review worker account requests and approve employees before they can sign in.</p></div><button class="button outline" @onclick="LoadUsersAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <div class="page-heading"><div><p class="eyebrow green">ACCOUNT APPROVAL</p><h1>Account approvals</h1><p class="muted">Approve new worker signups so employees can sign in.</p></div><button class="button outline" @onclick="LoadUsersAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    @if (!users.Any(x => x.role == "EMPLOYEE" && !x.active))
+                    {
+                        <p class="approval-note">No pending requests. New worker signups will appear here.</p>
+                    }
                     <section class="panel table-panel"><div class="panel-heading"><div><h2>Worker accounts</h2><p class="muted">Only active employee records can request an account. Admin accounts cannot be created here.</p></div><span class="record-count">@users.Count(x => x.role == "EMPLOYEE" && !x.active) PENDING</span></div><div class="table-scroll"><table><thead><tr><th>Username</th><th>Employee ID</th><th>Role</th><th>Access status</th><th>Action</th></tr></thead><tbody>
-                        @if (users.Count == 0) { <tr><td colspan="5" class="empty-cell">No user accounts were returned by the server.</td></tr> }
+                        @if (!users.Any(x => x.role == "EMPLOYEE")) { <tr><td colspan="5" class="empty-cell">No worker accounts yet. Requests appear here after a worker signs up.</td></tr> }
                         @foreach (var account in users.Where(x => x.role == "EMPLOYEE").OrderBy(x => x.active).ThenBy(x => x.username))
                         {
-                            <tr><td><strong>@account.username</strong></td><td>@(account.employeeId ?? "—")</td><td>Worker</td><td><span class="status @(account.active ? "good" : "warning")">@(account.active ? "Approved" : "Pending approval")</span></td><td>@if (!account.active) { <button class="text-button" @onclick="() => ApproveUserAsync(account)" disabled="@busy">Approve account</button> } else { <span class="muted">—</span> }</td></tr>
+                            <tr><td><strong>@account.username</strong></td><td>@(account.employeeId ?? "—")</td><td>Worker</td><td><span class="status @(account.active ? "good" : "warning")">@(account.active ? "Approved" : "Pending approval")</span></td><td>@if (!account.active) { <button class="button primary approve-button" @onclick="() => ApproveUserAsync(account)" disabled="@busy">Approve account</button> } else { <span class="muted">—</span> }</td></tr>
                         }
                         </tbody></table></div></section>
                 }
@@ -203,6 +219,7 @@ else
     private bool busy;
     private bool showSignup;
     private bool showEmployeeForm;
+    private EmployeeRecord? employeeToDeactivate;
     private string newEmployeeId = "";
     private string newEmployeeName = "";
     private string newEmployeePosition = "";
@@ -340,8 +357,10 @@ else
 
     private void OpenEmployeeForm()
     {
+        CancelDeactivation();
         employeeNotice = "";
         errorMessage = "";
+        CancelDeactivation();
         showEmployeeForm = true;
     }
 
@@ -350,6 +369,42 @@ else
         showEmployeeForm = false;
         newEmployeeId = newEmployeeName = newEmployeePosition = "";
         newEmployeeRate = 0;
+    }
+
+    private async Task OpenEmployeesAsync()
+    {
+        SelectView("Employees");
+        await LoadEmployeesAsync();
+    }
+
+    private void AskDeactivate(EmployeeRecord employee)
+    {
+        CloseEmployeeForm();
+        errorMessage = employeeNotice = "";
+        employeeToDeactivate = employee;
+    }
+
+    private void CancelDeactivation() => employeeToDeactivate = null;
+
+    private async Task DeactivateEmployeeAsync()
+    {
+        if (busy || employeeToDeactivate is not { } employee) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var response = await Http.DeleteAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}");
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = await ReadServerErrorAsync(response);
+                return;
+            }
+            employees.RemoveAll(record => record.employeeId == employee.employeeId);
+            CancelDeactivation();
+            employeeNotice = $"{employee.fullName} was deactivated.";
+        }
+        catch (HttpRequestException) { errorMessage = "Could not confirm deactivation. Refresh the list and check the employee status."; }
+        finally { busy = false; }
     }
 
     private async Task CreateEmployeeAsync()
@@ -580,11 +635,11 @@ else
         try
         {
             using var json = System.Text.Json.JsonDocument.Parse(body);
-            if (json.RootElement.TryGetProperty("error", out var error)) return error.GetString() ?? "Sign-in failed. Check your username and password.";
-            if (json.RootElement.TryGetProperty("message", out var message)) return message.GetString() ?? "Sign-in failed. Check your username and password.";
+            if (json.RootElement.TryGetProperty("error", out var error)) return error.GetString() ?? "The request could not be completed.";
+            if (json.RootElement.TryGetProperty("message", out var message)) return message.GetString() ?? "The request could not be completed.";
         }
         catch { }
-        return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? "Too many attempts. Wait 10 minutes, then try again." : "Username or password is incorrect.";
+        return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? "Too many attempts. Wait 10 minutes, then try again."  : $"The server could not complete the request (HTTP {(int)response.StatusCode}).";
     }
 
     private void SignOut()
@@ -592,6 +647,7 @@ else
         Http.DefaultRequestHeaders.Authorization = null;
         isSignedIn = false; isWorker = false; showSignup = false; username = ""; password = ""; signupEmployeeId = ""; signupUsername = ""; signupPassword = ""; signupConfirmPassword = ""; signupMessage = ""; errorMessage = "";
         CloseEmployeeForm();
+        CancelDeactivation();
         employeeNotice = "";
         worker = null; workerAttendance = null; dashboard = null; payrollRows = null; payrollSaved = false; connectedDevice = null; enrollmentMessages.Clear(); employees.Clear(); users.Clear(); attendanceRows.Clear();
     }
