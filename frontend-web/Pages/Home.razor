@@ -203,8 +203,8 @@ else
                             <div class="policy-versions">@foreach (var policy in policies.OrderByDescending(x => x.effectiveDate)) { <div><strong>₱@policy.ratePerMinute.ToString("0.0000") / late minute</strong><span>Effective @ShortDate(policy.effectiveDate)</span></div> }</div>
                         }
                         <form class="policy-form" @onsubmit="SavePolicyAsync" @onsubmit:preventDefault="true">
-                            <label>PHP per late minute<input type="number" min="0" max="999999.9999" step="0.0001" @bind="policyRate" @bind:after="ResetPolicyConfirmation" required /></label>
-                            <label>Effective date<input type="date" @bind="policyDate" @bind:after="ResetPolicyConfirmation" required /></label>
+                            <label>PHP per late minute<input type="number" min="0" max="999999.9999" step="0.0001" @bind="policyRate" @bind:event="oninput" @bind:after="ResetPolicyConfirmation" required /></label>
+                            <label>Effective date<input type="date" @bind="policyDate" @bind:event="oninput" @bind:after="ResetPolicyConfirmation" required /></label>
                             <label class="policy-confirm"><input type="checkbox" @bind="policyConfirmed" />I confirm late minutes × ₱@policyRate.ToString("0.0000") per minute from @policyDate.ToString("MMM d, yyyy"), capped at gross pay. Saved payroll stays fixed.</label>
                             <button class="button primary" type="submit" disabled="@(busy || !policyConfirmed)">Confirm and save policy</button>
                         </form>
