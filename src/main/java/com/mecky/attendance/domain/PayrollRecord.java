@@ -44,6 +44,15 @@ public class PayrollRecord {
     @Column(nullable = false, precision = 10, scale = 2)
     public BigDecimal deductions;
 
+    @Column(name = "late_deduction", nullable = false, precision = 10, scale = 2)
+    public BigDecimal lateDeduction = BigDecimal.ZERO.setScale(2);
+
+    @Column(name = "other_deductions", nullable = false, precision = 10, scale = 2)
+    public BigDecimal otherDeductions = BigDecimal.ZERO.setScale(2);
+
+    @Column(name = "policy_snapshot", columnDefinition = "TEXT")
+    public String policySnapshot;
+
     @Column(name = "net_pay", nullable = false, precision = 10, scale = 2)
     public BigDecimal netPay;
 

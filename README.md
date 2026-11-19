@@ -15,9 +15,9 @@ Workers can create an account from **New worker? Create an account** on the sign
 ## Payroll demo behavior
 
 - Select a date range, calculate the preview, edit/save an employee's daily rate, then save the period as a payroll run. A saved period is immutable; choose a different date range for another run.
-- Gross demo pay = attendance days with a time-in scan × daily rate, rounded to centavos. Recorded absences and late minutes are shown for reference but do not change pay. Deductions and undertime are zero/not calculated.
+- Gross demo pay = attendance days with a time-in scan × daily rate. Confirm a PHP-per-late-minute policy and effective date in Payroll before saving a run containing late minutes. A policy applies on each attendance date, after schedule grace. Late deduction is capped at gross pay. Saved runs retain daily rates and the policy calculation. Other deductions and undertime remain zero.
 - This is a school/demo payroll calculator, not Philippine statutory payroll. It does not calculate tax, SSS, PhilHealth, Pag-IBIG, overtime, holiday pay, or legal deductions.
-- A saved run stores a daily-rate snapshot. MySQL deployments apply migration `V4__payroll_rate_snapshot.sql`; the Render demo's H2 schema is created automatically.
+- A saved run stores a daily-rate snapshot. MySQL deployments apply migrations through `V5__late_deduction_policy.sql`; the Render demo's H2 schema is created automatically.
 - The current Render demo uses in-memory H2. Payroll runs, attendance and employee-to-fingerprint links are lost when the service restarts or sleeps. Use a persistent database before entering real records.
 
 ## Render configuration
@@ -53,3 +53,13 @@ The demo firmware uses insecure TLS certificate validation to simplify the Rende
 ## Build locally
 
 The Dockerfile builds the browser project with .NET 10, copies its published static files into the Java app, and builds the Spring Boot jar. Render builds this Dockerfile automatically when the connected GitHub branch changes.
+
+## Attendance management update
+
+Dashboard charts use server attendance records for the selected date range (up to 93 days). Present includes late arrivals. The current active employee list is the scope for both daily totals and historical charts. Absent means no time-in record, including off days.
+
+Employees supports Active and Inactive filters and confirmed Deactivate/Reactivate actions. Reactivation retains the employee, account and fingerprint slot mapping. The physical reader must still contain its stored template. Public signup and account approval are separate from employee activation.
+
+Refresh page reloads the current view while retaining dates and filters. Navigating to a page loads its latest data. Payroll shows the applied policy, late and other deductions in its preview, saved result and CSV export. A missing applicable policy blocks saving a run with late minutes. Confirmed policies are immutable versions, with one version per effective date. Add another effective date to change the rate. Refreshing and retrying an existing period return the saved run.
+
+The Render demo still uses in-memory H2. Restarts clear records, policies and server fingerprint mappings. These changes preserve mappings across deactivation/reactivation while the database records exist.

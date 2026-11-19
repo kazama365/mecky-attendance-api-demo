@@ -21,7 +21,7 @@ import java.math.*;
   Attendance a=attendance.findByEmployeeEmployeeIdAndAttendanceDate(e.employeeId,day).orElseGet(()->new Attendance(e,day));
   if(a.timeIn==null){
    a.timeIn=at;a.scanUuid=scan.scanUuid();WorkSchedule s=schedules.findById(e.employeeId).orElse(null);int grace=s==null?5:s.graceMinutes;LocalTime expected=s==null?LocalTime.of(9,0):s.expectedTimeIn;
-   a.lateMinutes=Math.max(0,(int)Duration.between(expected.plusMinutes(grace),at.toLocalTime()).toMinutes());a.status=a.lateMinutes>0?"LATE":"PRESENT";events.save(new ScanEvent(scan.scanUuid(),scan.slotId(),at,"TIME_IN",e.employeeId));attendance.save(a);
+   a.lateMinutes=Math.max(0,(int)Duration.between(day.atTime(expected).plusMinutes(grace),at).toMinutes());a.status=a.lateMinutes>0?"LATE":"PRESENT";events.save(new ScanEvent(scan.scanUuid(),scan.slotId(),at,"TIME_IN",e.employeeId));attendance.save(a);
    publishAttendanceAfterCommit(e.employeeId,"{\"type\":\"attendance.new\",\"employeeId\":\""+e.employeeId+"\",\"employeeName\":\""+safe(e.fullName)+"\",\"status\":\""+a.status+"\"}");
    return new ScanResult(scan.scanUuid(),"TIME_IN",e.employeeId,e.fullName,a.status);
   }
