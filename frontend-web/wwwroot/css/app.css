@@ -67,3 +67,58 @@
     border-radius: 10px;
 }
 .approve-button { white-space: nowrap; }
+
+/* Attendance management */
+:root { --navy: #102f3a; --teal: #117c70; --line: #dfe9e6; }
+body, button, input, select { font-family: 'DM Sans', Arial, sans-serif; }
+h1, h2, .page-heading h1, .wordmark { font-family: 'DM Sans', Arial, sans-serif; }
+.admin-shell { background: #f2f6f5; }
+.admin-content { padding-top: 30px; }
+.sidebar { position: sticky; top: 0; height: 100vh; min-height: 0; }
+.sidebar nav { gap: 8px; }
+.side-link { padding: 13px 14px; font-size: 13px; }
+.panel { box-shadow: 0 4px 18px #123e2f06; }
+.stat-card { border-top: 3px solid #b8dbce; }
+.stat-card strong { color: #123c35; font-variant-numeric: tabular-nums; }
+.refresh-notice { font-size: 12px; color: #286f5b; margin-bottom: 14px; }
+.filter-toolbar { display: flex; gap: 12px; margin: 0 0 18px; }
+.filter-toolbar label, .chart-controls label, .policy-form label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; color: #35534b; }
+select, .chart-controls input, .policy-form input { border: 1px solid #cdded7; background: white; color: #243d36; border-radius: 8px; padding: 10px 12px; font: inherit; }
+select:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #8bd2ba; outline-offset: 2px; }
+.analytics-panel { margin-bottom: 22px; }
+.chart-controls { display: flex; gap: 12px; align-items: end; padding: 0 22px 16px; flex-wrap: wrap; }
+.chart-legend { display: flex; gap: 22px; padding: 0 22px 8px; font-size: 12px; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.present { background: #168675; }
+.absent { background: #b1bbc4; }
+.late { background: #df9b35; }
+.trend-chart { display: flex; align-items: end; gap: 16px; padding: 24px 22px 20px; overflow-x: auto; }
+.trend-day { flex: 1 0 80px; text-align: center; min-width: 80px; }
+.trend-bars { height: 148px; display: flex; gap: 5px; align-items: end; border-bottom: 1px solid #dce6e1; }
+.trend-bar { flex: 1; position: relative; min-height: 2px; border-radius: 4px 4px 0 0; }
+.trend-bar span { position: absolute; top: -20px; left: 0; right: 0; font-size: 11px; font-weight: 700; color: #365448; }
+.chart-date { display: block; white-space: nowrap; font-size: 10px; color: #6b8177; margin-top: 10px; }
+.policy-panel { margin: 20px 0; }
+.policy-panel .approval-note { margin: 0 20px 16px; }
+.policy-versions { padding: 0 22px 12px; display: flex; flex-wrap: wrap; gap: 10px; max-height: 180px; overflow-y: auto; }
+.policy-versions>div { padding: 10px 14px; background: #eef6f2; border-radius: 8px; font-size: 12px; }
+.policy-versions span { display: block; margin-top: 4px; color: #5f7c6c; }
+.policy-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 22px 22px; }
+.policy-form .policy-confirm { grid-column: 1 / -1; display: flex; align-items: flex-start; font-weight: 400; line-height: 1.6; }
+.policy-confirm input { margin-top: 4px; accent-color: #117c70; }
+.policy-form .button { justify-self: start; }
+td.policy-detail { white-space: normal; min-width: 240px; max-width: 380px; font-size: 11px; line-height: 1.6; }
+.payroll-table { min-width: 1450px; }
+@media(max-width:620px) {
+    .sidebar { position: static; height: auto; }
+    .sidebar-bottom { display: flex; justify-content: flex-end; border: 0; padding: 5px 0 0; }
+    .sidebar-user { display: none; }
+    .chart-controls { padding: 0 15px 16px; }
+    .chart-controls label { flex: 1; min-width: 120px; }
+    .chart-controls .button { width: 100%; }
+    .policy-form { grid-template-columns: 1fr; padding: 0 15px 16px; }
+    .policy-form .button { width: 100%; }
+    .compact-refresh { padding: 8px 10px; font-size: 11px; }
+    .breadcrumb { font-size: 9px; }
+}
