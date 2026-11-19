@@ -82,11 +82,12 @@ else if (isWorker)
 {
     <div class="portal-shell">
         <header class="portal-header"><a class="wordmark" href="/"><span class="brand-mark small">M</span><span>MECKY'S<small>ATTENDANCE PORTAL</small></span></a><div class="header-user"><span class="avatar">@Initials(worker?.fullName)</span><span class="user-name">@worker?.fullName<small>Worker account</small></span><button class="button outline" @onclick="SignOut">Sign out</button></div></header>
-        <main class="portal-main">
-            <div class="page-heading"><div><p class="eyebrow green">MY WORKSPACE</p><h1>My attendance</h1><p class="muted">Review your scans and workdays for up to five days.</p></div><button class="button outline" @onclick="LoadWorkerAttendanceAsync" disabled="@busy">↻ &nbsp;Refresh status</button></div>
+        <main class="portal-main" aria-busy="@refreshing">
+            @if (refreshNotice.Length > 0) { <div class="refresh-notice" role="status">@refreshNotice</div> }
+            <div class="page-heading"><div><p class="eyebrow green">MY WORKSPACE</p><h1>My attendance</h1><p class="muted">Review your scans and workdays for up to five days.</p></div><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">↻ &nbsp;Refresh status</button></div>
             @if (!string.IsNullOrWhiteSpace(errorMessage)) { <div class="alert error" role="alert">@errorMessage</div> }
             <section class="welcome-strip"><div class="welcome-icon">@Initials(worker?.fullName)</div><div><span class="muted">SIGNED IN AS</span><h2>@(worker?.fullName ?? username)</h2><p>@(worker?.position ?? "Employee") <span class="dot-separator">•</span> ID @worker?.employeeId</p></div><div class="live-pill"><span></span> Connected</div></section>
-            <section class="panel range-panel"><div><h2>Choose the days to view</h2><p class="muted">You can check a range of one to five calendar days.</p></div><div class="range-controls"><label>From<input type="date" @bind="fromDate" /></label><span class="range-dash">—</span><label>To<input type="date" @bind="toDate" /></label><button class="button primary" @onclick="LoadWorkerAttendanceAsync" disabled="@busy">Show days</button></div></section>
+            <section class="panel range-panel"><div><h2>Choose the days to view</h2><p class="muted">You can check a range of one to five calendar days.</p></div><div class="range-controls"><label>From<input type="date" @bind="fromDate" /></label><span class="range-dash">—</span><label>To<input type="date" @bind="toDate" /></label><button class="button primary" @onclick="RefreshCurrentPageAsync" disabled="@busy">Show days</button></div></section>
             @if (workerAttendance is not null)
             {
                 <section class="stat-grid worker-stats"><article class="stat-card"><span>Days worked</span><strong>@workerAttendance.daysWorked</strong><small>Days with a time-in scan</small></article><article class="stat-card"><span>Days absent</span><strong>@workerAttendance.daysAbsent</strong><small>Recorded absence</small></article><article class="stat-card"><span>Days in range</span><strong>@workerAttendance.days.Count</strong><small>@ShortDate(workerAttendance.from) – @ShortDate(workerAttendance.to)</small></article></section>
@@ -105,20 +106,43 @@ else
 {
     <div class="admin-shell">
         <aside class="sidebar"><a class="wordmark side-wordmark" href="/"><span class="brand-mark">M</span><span>MECKY'S<small>CEO / ADMIN</small></span></a><div class="side-label">WORKSPACE</div><nav>
-            <button class="side-link @(activeView == "Dashboard" ? "active" : "")" @onclick='() => SelectView("Dashboard")'><span>◫</span>Dashboard</button>
+            <button class="side-link @(activeView == "Dashboard" ? "active" : "")" @onclick='() => NavigateAsync("Dashboard")'><span>◫</span>Dashboard</button>
             <button class="side-link @(activeView == "Employees" ? "active" : "")" @onclick="OpenEmployeesAsync"><span>♙</span>Employees</button>
             <button class="side-link @(activeView == "Attendance" ? "active" : "")" @onclick="OpenAttendanceAsync"><span>◷</span>Attendance</button>
             <button class="side-link @(activeView == "Payroll" ? "active" : "")" @onclick="OpenPayrollAsync"><span>₱</span>Payroll</button>
             <button class="side-link @(activeView == "User Access" ? "active" : "")" @onclick="OpenUserAccessAsync"><span>♙</span>Account approvals</button>
         </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
         <main class="admin-main">
-            <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
-            <div class="admin-content">
+            <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><button class="button outline compact-refresh" @onclick="RefreshCurrentPageAsync" disabled="@(busy || refreshing)">@(refreshing ? "Refreshing…" : "Refresh page")</button><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
+            <div class="admin-content" aria-busy="@refreshing">
+                @if (refreshNotice.Length > 0) { <div class="refresh-notice" role="status">@refreshNotice</div> }
                 @if (!string.IsNullOrWhiteSpace(errorMessage)) { <div class="alert error" role="alert">@errorMessage</div> }
                 @if (activeView == "Dashboard")
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">OVERVIEW</p><h1>Dashboard</h1><p class="muted">Attendance summary for @ShortDate(dashboard?.date ?? today).</p></div><button class="button outline" @onclick="LoadAdminAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <div class="page-heading"><div><p class="eyebrow green">OVERVIEW</p><h1>Dashboard</h1><p class="muted">Attendance summary for @ShortDate(dashboard?.date ?? today).</p></div><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@(busy || refreshing)">Refresh</button></div>
                     <section class="stat-grid"><article class="stat-card"><span>Active employees</span><strong>@(dashboard?.employees ?? 0)</strong><small>Employee records</small></article><article class="stat-card"><span>Present today</span><strong>@(dashboard?.present ?? 0)</strong><small>Time-in recorded</small></article><article class="stat-card"><span>Absent today</span><strong>@(dashboard?.absent ?? 0)</strong><small>Based on active employees</small></article><article class="stat-card"><span>Late today</span><strong>@(dashboard?.late ?? 0)</strong><small>Late arrivals</small></article></section>
+                    <section class="panel analytics-panel">
+                        <div class="panel-heading"><div><h2>Attendance trends</h2><p class="muted">Current active employees. Present includes late arrivals. Absent means no time-in record.</p></div></div>
+                        <div class="chart-controls">
+                            <label>Trend from<input type="date" @bind="trendFrom" /></label>
+                            <label>Trend to<input type="date" @bind="trendTo" /></label>
+                            <button class="button primary" @onclick="RefreshCurrentPageAsync" disabled="@busy">Show trends</button>
+                        </div>
+                        <div class="chart-legend"><span><i class="present"></i>Present</span><span><i class="absent"></i>Absent</span><span><i class="late"></i>Late</span></div>
+                        <div class="trend-chart" role="group" aria-label="Daily attendance chart">
+                            @foreach (var day in dashboard?.trend ?? new List<TrendDay>())
+                            {
+                                <div class="trend-day">
+                                    <div class="trend-bars">
+                                        <div class="trend-bar present" style="@BarHeight(day.present)" title="@($"{day.date} — Present {day.present}")"><span>@day.present</span></div>
+                                        <div class="trend-bar absent" style="@BarHeight(day.absent)" title="@($"{day.date} — Absent {day.absent}")"><span>@day.absent</span></div>
+                                        <div class="trend-bar late" style="@BarHeight(day.late)" title="@($"{day.date} — Late {day.late}")"><span>@day.late</span></div>
+                                    </div><span class="chart-date">@ShortDate(day.date)</span>
+                                </div>
+                            }
+                        </div>
+                        @if (dashboard?.trend.Count == 0) { <p class="empty-cell">No dates available for this range.</p> }
+                    </section>
                     <section class="panel table-panel"><div class="panel-heading"><div><h2>Latest attendance</h2><p class="muted">Today's latest employee scans</p></div><button class="text-button" @onclick="OpenAttendanceAsync">View attendance →</button></div>@AttendanceTable(dashboard?.latest ?? new List<AttendanceRecord>())</section>
                     <section class="notice-card"><span class="notice-icon">@(connectedDevice is null ? "…" : connectedDevice.status == "ONLINE" ? "✓" : "!")</span><div><strong>Fingerprint device: @(connectedDevice?.status ?? "Not seen yet")</strong><p>@(connectedDevice?.lastSeen is { Length: > 0 } seen ? $"Last heartbeat: {FormatMoment(seen)}" : "Connect the ESP32 and check its Render API key; the device status updates on its heartbeat.") Payroll demo is available from the left menu.</p></div></section>
                 }
@@ -127,7 +151,7 @@ else
                     <div class="page-heading">
                         <div><p class="eyebrow green">PEOPLE</p><h1>Employees</h1><p class="muted">Manage employee records and fingerprint enrollment.</p></div>
                         <div class="employee-actions">
-                            <button class="button outline" @onclick="LoadEmployeesAsync" disabled="@busy">Refresh</button>
+                            <button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">Refresh</button>
                             <button class="button outline" @onclick="OpenUserAccessAsync">Account approvals</button>
                             <button class="button primary" @onclick="OpenEmployeeForm" disabled="@busy">Add employee</button>
                         </div>
@@ -139,10 +163,10 @@ else
                     @if (employeeToDeactivate is { } selectedEmployee)
                     {
                         <section class="panel employee-editor deactivate-confirm" aria-labelledby="deactivate-title">
-                            <h2 id="deactivate-title">Deactivate @selectedEmployee.fullName?</h2>
-                            <p class="muted">This removes the employee from the active list and preserves their attendance history.</p>
+                            <h2 id="deactivate-title">@(selectedEmployee.active ? "Deactivate" : "Reactivate") @selectedEmployee.fullName?</h2>
+                            <p class="muted">@(selectedEmployee.active ? "Remove from the active list. Attendance history, account and fingerprint mapping are preserved." : "Restore the employee with the same account and fingerprint mapping. An existing sensor template can be used again.")</p>
                             <div class="employee-actions">
-                                <button class="button danger" @onclick="DeactivateEmployeeAsync" disabled="@busy">Confirm deactivation</button>
+                                <button class="button danger" @onclick="DeactivateEmployeeAsync" disabled="@busy">@(selectedEmployee.active ? "Confirm deactivation" : "Confirm reactivation")</button>
                                 <button class="button outline" @onclick="CancelDeactivation" disabled="@busy">Cancel</button>
                             </div>
                         </section>
@@ -164,23 +188,39 @@ else
                             </form>
                         </section>
                     }
-                    <section class="panel table-panel"><div class="panel-heading"><div><h2>Active employees</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table class="employees-table"><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th><th>Manage</th></tr></thead><tbody>@if (employees.Count == 0) { <tr><td colspan="7" class="empty-cell">No active employees. Select Add employee to get started.</td></tr> } @foreach (var employee in employees) { <tr><td><div class="employee-name"><span class="employee-initials" aria-hidden="true">@Initials(employee.fullName)</span><strong>@employee.fullName</strong></div></td><td><span class="employee-id">@employee.employeeId</span></td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@busy">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td><td><button class="text-button danger-text" @onclick="() => AskDeactivate(employee)" disabled="@busy">Deactivate</button></td></tr> }</tbody></table></div></section>
+                    <div class="filter-toolbar"><label>Employee status<select @bind="employeeFilter" @bind:after="RefreshCurrentPageAsync"><option value="true">Active employees</option><option value="false">Inactive employees</option></select></label></div>
+                    <section class="panel table-panel"><div class="panel-heading"><div><h2>@(employeeFilter == "true" ? "Active employees" : "Inactive employees")</h2><p class="muted">Start fingerprint enrollment here; the employee then scans twice at the connected ESP32.</p></div><span class="record-count">@employees.Count EMPLOYEES</span></div><div class="table-scroll"><table class="employees-table"><thead><tr><th>Employee</th><th>Employee ID</th><th>Position</th><th>Fingerprint slot</th><th>Daily rate</th><th>Device enrollment</th><th>Manage</th></tr></thead><tbody>@if (employees.Count == 0) { <tr><td colspan="7" class="empty-cell">No employees match this status.</td></tr> } @foreach (var employee in employees) { <tr><td><div class="employee-name"><span class="employee-initials" aria-hidden="true">@Initials(employee.fullName)</span><strong>@employee.fullName</strong></div></td><td><span class="employee-id">@employee.employeeId</span></td><td>@(string.IsNullOrWhiteSpace(employee.position) ? "—" : employee.position)</td><td>@(employee.sensorSlotId?.ToString() ?? "Not enrolled")</td><td>@Money(employee.dailyRate)</td><td><div class="enroll-actions"><button class="text-button" @onclick="() => StartEnrollmentAsync(employee)" disabled="@(busy || !employee.active)">Start enrollment</button><button class="text-button" @onclick="() => CheckEnrollmentAsync(employee)" disabled="@busy">Check status</button></div>@if (enrollmentMessages.TryGetValue(employee.employeeId, out var message)) { <small class="enrollment-note">@message</small> }</td><td><button class="text-button danger-text" @onclick="() => AskDeactivate(employee)" disabled="@busy">@(employee.active ? "Deactivate" : "Reactivate")</button></td></tr> }</tbody></table></div></section>
                 }
                 else if (activeView == "Payroll")
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">PAY PERIOD</p><h1>Payroll</h1><p class="muted">Calculate pay from fingerprint attendance for the selected dates.</p></div><div class="date-toolbar payroll-toolbar"><label>From<input type="date" @bind="payrollFrom" /></label><label>To<input type="date" @bind="payrollTo" /></label><button class="button primary" @onclick="CalculatePayrollAsync" disabled="@busy">Calculate</button></div></div>
-                    <section class="notice-card payroll-note"><span class="notice-icon">₱</span><div><strong>Demo payroll calculation</strong><p>Gross pay = days with a time-in scan × daily rate. Demo deductions are ₱0; tax, SSS, PhilHealth, Pag-IBIG, overtime, and undertime are not calculated.</p></div></section>
+                    <div class="page-heading"><div><p class="eyebrow green">PAY PERIOD</p><h1>Payroll</h1><p class="muted">Calculate pay from fingerprint attendance for the selected dates.</p></div><div class="date-toolbar payroll-toolbar"><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">Refresh</button><label>From<input type="date" @bind="payrollFrom" /></label><label>To<input type="date" @bind="payrollTo" /></label><button class="button primary" @onclick="CalculatePayrollAsync" disabled="@busy">Calculate</button></div></div>
+                    <section class="notice-card payroll-note"><span class="notice-icon">₱</span><div><strong>Demo payroll calculation</strong><p>Gross pay uses days with a time-in scan × daily rate. Late deductions use the confirmed PHP/minute policy effective on each attendance date. Other deductions are ₱0. Tax, contributions, overtime and undertime require separate policies.</p></div></section>
+                    <section class="panel policy-panel">
+                        <div class="panel-heading"><div><h2>Late deduction policy</h2><p class="muted">Late minutes are measured after the schedule's grace period. Rates apply by attendance date. Total late deduction is capped at gross pay.</p></div></div>
+                        @if (policies.Count == 0) { <p class="approval-note">Awaiting configuration. Late deductions need a confirmed policy.</p> }
+                        else
+                        {
+                            <div class="policy-versions">@foreach (var policy in policies.OrderByDescending(x => x.effectiveDate)) { <div><strong>₱@policy.ratePerMinute.ToString("0.0000") / late minute</strong><span>Effective @ShortDate(policy.effectiveDate)</span></div> }</div>
+                        }
+                        <form class="policy-form" @onsubmit="SavePolicyAsync" @onsubmit:preventDefault="true">
+                            <label>PHP per late minute<input type="number" min="0" max="999999.9999" step="0.0001" @bind="policyRate" @bind:after="ResetPolicyConfirmation" required /></label>
+                            <label>Effective date<input type="date" @bind="policyDate" @bind:after="ResetPolicyConfirmation" required /></label>
+                            <label class="policy-confirm"><input type="checkbox" @bind="policyConfirmed" />I confirm late minutes × ₱@policyRate.ToString("0.0000") per minute from @policyDate.ToString("MMM d, yyyy"), capped at gross pay. Saved payroll stays fixed.</label>
+                            <button class="button primary" type="submit" disabled="@(busy || !policyConfirmed)">Confirm and save policy</button>
+                        </form>
+                    </section>
                     @if (payrollRows is not null)
                     {
-                        <section class="stat-grid compact-stats payroll-stats"><article class="stat-card"><span>Employees</span><strong>@payrollRows.Count</strong><small>Active employees in this run</small></article><article class="stat-card"><span>Gross pay</span><strong>@Money(payrollRows.Sum(x => x.grossPay))</strong><small>Before deductions</small></article><article class="stat-card"><span>Net demo pay</span><strong>@Money(payrollRows.Sum(x => x.netPay))</strong><small>Equal to gross in this demo</small></article></section>
-                        <section class="panel table-panel"><div class="panel-heading"><div><h2>@(payrollSaved ? "Saved payroll run" : "Payroll preview")</h2><p class="muted">@ShortDate(payrollFrom) – @ShortDate(payrollTo) @(payrollSaved ? "• Saved; this period is locked" : "• Review the figures before saving")</p></div><div class="payroll-actions"><button class="button outline" @onclick="ExportPayrollAsync" disabled="@(payrollRows.Count == 0)">Export CSV</button><button class="button primary" @onclick="SavePayrollAsync" disabled="@(busy || payrollSaved || payrollRows.Count == 0)">@(payrollSaved ? "Run saved" : "Save payroll run")</button></div></div><div class="table-scroll"><table class="payroll-table"><thead><tr><th>Employee</th><th>Days present</th><th>Recorded absences</th><th>Late minutes</th><th>Daily rate</th><th>Gross pay</th><th>Deductions</th><th>Net demo pay</th>@if (!payrollSaved) { <th>Rate action</th> }</tr></thead><tbody>
-                            @if (payrollRows.Count == 0) { <tr><td colspan="9" class="empty-cell">No active employees were found for this payroll run.</td></tr> }
+                        @if (!PayrollPeriodMatches) { <p class="approval-note">Dates changed. Select Calculate or Refresh to update this preview before saving or exporting.</p> }
+                        <section class="stat-grid compact-stats payroll-stats"><article class="stat-card"><span>Employees</span><strong>@payrollRows.Count</strong><small>Active employees in this run</small></article><article class="stat-card"><span>Gross pay</span><strong>@Money(payrollRows.Sum(x => x.grossPay))</strong><small>Before deductions</small></article><article class="stat-card"><span>Net pay</span><strong>@Money(payrollRows.Sum(x => x.netPay))</strong><small>After recorded deductions</small></article></section>
+                        <section class="panel table-panel"><div class="panel-heading"><div><h2>@(payrollSaved ? "Saved payroll run" : "Payroll preview")</h2><p class="muted">@ShortDate(displayedPayrollFrom) – @ShortDate(displayedPayrollTo) @(payrollSaved ? "• Saved; this period is locked" : "• Review the figures before saving")</p></div><div class="payroll-actions"><button class="button outline" @onclick="ExportPayrollAsync" disabled="@(payrollRows.Count == 0 || !PayrollPeriodMatches)">Export CSV</button><button class="button primary" @onclick="SavePayrollAsync" disabled="@(busy || payrollSaved || payrollRows.Count == 0 || payrollRows.Any(x => x.awaitingPolicy) || !PayrollPeriodMatches)">@(payrollSaved ? "Run saved" : "Save payroll run")</button></div></div><div class="table-scroll"><table class="payroll-table"><thead><tr><th>Employee</th><th>Days present</th><th>Recorded absences</th><th>Late minutes</th><th>Daily rate</th><th>Gross pay</th><th>Late deduction</th><th>Other deductions</th><th>Total deductions</th><th>Net pay</th><th>Applied policy</th>@if (!payrollSaved) { <th>Rate action</th> }</tr></thead><tbody>
+                            @if (payrollRows.Count == 0) { <tr><td colspan="12" class="empty-cell">No active employees were found for this payroll run.</td></tr> }
                             @foreach (var row in payrollRows)
                             {
-                                <tr><td><strong>@row.employeeName</strong><small>@row.employeeId</small></td><td>@row.daysPresent</td><td>@row.daysAbsent</td><td>@row.lateMinutes</td><td>@if (payrollSaved) { @Money(row.dailyRate) } else { <input aria-label="Daily rate for @row.employeeName" type="number" min="0" step="0.01" @bind="row.rateEdit" /> }</td><td><strong>@Money(row.grossPay)</strong></td><td>@Money(row.deductions)</td><td><strong>@Money(row.netPay)</strong></td>@if (!payrollSaved) { <td><button class="text-button" @onclick="() => SaveDailyRateAsync(row)" disabled="@busy">Save rate</button></td> }</tr>
+                                <tr><td><strong>@row.employeeName</strong><small>@row.employeeId</small></td><td>@row.daysPresent</td><td>@row.daysAbsent</td><td>@row.lateMinutes</td><td>@if (payrollSaved) { @Money(row.dailyRate) } else { <input aria-label="Daily rate for @row.employeeName" type="number" min="0" step="0.01" @bind="row.rateEdit" /> }</td><td><strong>@Money(row.grossPay)</strong></td><td>@Money(row.lateDeduction)</td><td>@Money(row.otherDeductions)</td><td>@Money(row.deductions)</td><td><strong>@Money(row.netPay)</strong></td><td class="policy-detail">@row.policySnapshot</td>@if (!payrollSaved) { <td><button class="text-button" @onclick="() => SaveDailyRateAsync(row)" disabled="@busy">Save rate</button></td> }</tr>
                             }
-                        </tbody><tfoot><tr><th colspan="5">TOTAL</th><th>@Money(payrollRows.Sum(x => x.grossPay))</th><th>@Money(payrollRows.Sum(x => x.deductions))</th><th>@Money(payrollRows.Sum(x => x.netPay))</th>@if (!payrollSaved) { <th></th> }</tr></tfoot></table></div></section>
-                        <p class="footnote">Saved runs cannot be changed. Render's current demo uses an in-memory H2 database, so saved payroll and attendance are cleared when the service restarts.</p>
+                        </tbody><tfoot><tr><th colspan="5">TOTAL</th><th>@Money(payrollRows.Sum(x => x.grossPay))</th><th>@Money(payrollRows.Sum(x => x.lateDeduction))</th><th>@Money(payrollRows.Sum(x => x.otherDeductions))</th><th>@Money(payrollRows.Sum(x => x.deductions))</th><th>@Money(payrollRows.Sum(x => x.netPay))</th><th></th>@if (!payrollSaved) { <th></th> }</tr></tfoot></table></div></section>
+                        <p class="footnote">@(payrollRows.Any(x => x.awaitingPolicy) ? "Saving is disabled until a confirmed policy covers each late attendance date." : "") Saved runs cannot be changed. Render's current demo uses an in-memory H2 database, so saved payroll and attendance are cleared when the service restarts.</p>
                     }
                     else
                     {
@@ -189,7 +229,7 @@ else
                 }
                 else if (activeView == "User Access")
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">ACCOUNT APPROVAL</p><h1>Account approvals</h1><p class="muted">Approve new worker signups so employees can sign in.</p></div><button class="button outline" @onclick="LoadUsersAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
+                    <div class="page-heading"><div><p class="eyebrow green">ACCOUNT APPROVAL</p><h1>Account approvals</h1><p class="muted">Approve new worker signups so employees can sign in.</p></div><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">↻ &nbsp;Refresh</button></div>
                     @if (!users.Any(x => x.role == "EMPLOYEE" && !x.active))
                     {
                         <p class="approval-note">No pending requests. New worker signups will appear here.</p>
@@ -204,7 +244,7 @@ else
                 }
                 else
                 {
-                    <div class="page-heading"><div><p class="eyebrow green">DAILY RECORDS</p><h1>Attendance</h1><p class="muted">Review fingerprint scans for a selected date.</p></div><div class="date-toolbar"><input type="date" @bind="attendanceDate" /><button class="button primary" @onclick="LoadAttendanceAsync" disabled="@busy">Show date</button></div></div>
+                    <div class="page-heading"><div><p class="eyebrow green">DAILY RECORDS</p><h1>Attendance</h1><p class="muted">Review fingerprint scans for a selected date.</p></div><div class="date-toolbar"><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">Refresh</button><input type="date" @bind="attendanceDate" /><button class="button primary" @onclick="RefreshCurrentPageAsync" disabled="@busy">Show date</button></div></div>
                     <section class="stat-grid compact-stats"><article class="stat-card"><span>Records</span><strong>@attendanceRows.Count</strong></article><article class="stat-card"><span>Present</span><strong>@attendanceRows.Count(x => x.status == "PRESENT" || x.status == "TIME_OUT")</strong></article><article class="stat-card"><span>Late</span><strong>@attendanceRows.Count(x => x.status == "LATE" || x.lateMinutes > 0)</strong></article></section>
                     <section class="panel table-panel"><div class="panel-heading"><div><h2>Attendance records</h2><p class="muted">@ShortDate(attendanceDate)</p></div><span class="record-count">@attendanceRows.Count RECORDS</span></div>@AttendanceTable(attendanceRows)</section>
                 }
@@ -215,6 +255,15 @@ else
 }
 
 @code {
+    private bool refreshing;
+    private string refreshNotice = "";
+    private string employeeFilter = "true";
+    private DateTime trendFrom = DateTime.Today.AddDays(-6);
+    private DateTime trendTo = DateTime.Today;
+    private List<DeductionPolicyRecord> policies = new();
+    private decimal policyRate;
+    private DateTime policyDate = DateTime.Today;
+    private bool policyConfirmed;
     private bool isSignedIn;
     private bool isWorker;
     private bool busy;
@@ -244,12 +293,17 @@ else
     private string lastUpdated = "—";
     private DashboardSummary? dashboard;
     private List<EmployeeRecord> employees = new();
+    private List<EmployeeRecord> payrollEmployees = new();
     private List<UserAccountRecord> users = new();
     private List<AttendanceRecord> attendanceRows = new();
     private WorkerProfile? worker;
     private WorkerAttendance? workerAttendance;
     private List<PayrollRow>? payrollRows;
     private bool payrollSaved;
+    private string displayedPayrollFrom = "";
+    private string displayedPayrollTo = "";
+    private bool PayrollPeriodMatches => displayedPayrollFrom == payrollFrom.ToString("yyyy-MM-dd")
+        && displayedPayrollTo == payrollTo.ToString("yyyy-MM-dd");
     private Dictionary<string, string> enrollmentMessages = new();
     private DeviceStatusRecord? connectedDevice;
 
@@ -344,7 +398,7 @@ else
         errorMessage = "";
         try
         {
-            dashboard = await Http.GetFromJsonAsync<DashboardSummary>("api/dashboard");
+            dashboard = await Http.GetFromJsonAsync<DashboardSummary>($"api/dashboard?from={trendFrom:yyyy-MM-dd}&to={trendTo:yyyy-MM-dd}");
             await LoadEmployeesAsync();
             if (dashboard is not null) attendanceRows = dashboard.latest;
             try
@@ -374,8 +428,7 @@ else
 
     private async Task OpenEmployeesAsync()
     {
-        SelectView("Employees");
-        await LoadEmployeesAsync();
+        await NavigateAsync("Employees");
     }
 
     private void AskDeactivate(EmployeeRecord employee)
@@ -394,7 +447,8 @@ else
         errorMessage = "";
         try
         {
-            using var response = await Http.DeleteAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}");
+            var path = $"api/employees/{Uri.EscapeDataString(employee.employeeId)}";
+            using var response = employee.active ? await Http.DeleteAsync(path) : await Http.PostAsync(path + "/reactivate", null);
             if (!response.IsSuccessStatusCode)
             {
                 errorMessage = await ReadServerErrorAsync(response);
@@ -402,7 +456,7 @@ else
             }
             employees.RemoveAll(record => record.employeeId == employee.employeeId);
             CancelDeactivation();
-            employeeNotice = $"{employee.fullName} was deactivated.";
+            employeeNotice = $"{employee.fullName} was {(employee.active ? "deactivated" : "reactivated")}. Fingerprint mapping retained.";
         }
         catch (HttpRequestException) { errorMessage = "Could not confirm deactivation. Refresh the list and check the employee status."; }
         finally { busy = false; }
@@ -426,6 +480,7 @@ else
             using var response = await Http.PostAsync("api/employees", body);
             if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
             CloseEmployeeForm();
+            employeeFilter = "true";
             employeeNotice = $"Employee {id} saved. Share this ID for signup, or select Start enrollment to link a fingerprint.";
             await LoadEmployeesAsync();
         }
@@ -437,7 +492,7 @@ else
     {
         try
         {
-            var page = await Http.GetFromJsonAsync<EmployeePage>("api/employees?page=0&size=100");
+            var page = await Http.GetFromJsonAsync<EmployeePage>($"api/employees?page=0&size=100&active={employeeFilter}");
             employees = page?.content ?? new List<EmployeeRecord>();
         }
         catch (HttpRequestException) { errorMessage = "Employee records could not be loaded from the server."; }
@@ -445,8 +500,7 @@ else
 
     private async Task OpenUserAccessAsync()
     {
-        activeView = "User Access";
-        await LoadUsersAsync();
+        await NavigateAsync("User Access");
     }
 
     private async Task LoadUsersAsync()
@@ -480,9 +534,7 @@ else
 
     private async Task OpenAttendanceAsync()
     {
-        activeView = "Attendance";
-        attendanceDate = DateTime.Today;
-        await LoadAttendanceAsync();
+        await NavigateAsync("Attendance");
     }
 
     private async Task StartEnrollmentAsync(EmployeeRecord employee)
@@ -532,9 +584,7 @@ else
 
     private async Task OpenPayrollAsync()
     {
-        activeView = "Payroll";
-        payrollRows = null;
-        await CalculatePayrollAsync();
+        await NavigateAsync("Payroll");
     }
 
     private async Task CalculatePayrollAsync()
@@ -548,10 +598,14 @@ else
         busy = true;
         try
         {
-            var preview = await Http.GetFromJsonAsync<List<PayrollRow>>($"api/reports/payroll?from={payrollFrom:yyyy-MM-dd}&to={payrollTo:yyyy-MM-dd}") ?? new();
-            var saved = await Http.GetFromJsonAsync<PayrollRunResponse>($"api/payroll/run?from={payrollFrom:yyyy-MM-dd}&to={payrollTo:yyyy-MM-dd}");
-            payrollSaved = saved?.saved == true;
-            payrollRows = payrollSaved ? (saved?.rows ?? new()) : preview;
+            var preview = await Http.GetFromJsonAsync<PayrollRunResponse>($"api/payroll/preview?from={payrollFrom:yyyy-MM-dd}&to={payrollTo:yyyy-MM-dd}");
+            policies = await Http.GetFromJsonAsync<List<DeductionPolicyRecord>>("api/payroll/policies") ?? new();
+            var activeEmployees = await Http.GetFromJsonAsync<EmployeePage>("api/employees?page=0&size=100&active=true");
+            payrollEmployees = activeEmployees?.content ?? new();
+            payrollSaved = preview?.saved == true;
+            payrollRows = preview?.rows ?? new();
+            displayedPayrollFrom = preview?.from ?? "";
+            displayedPayrollTo = preview?.to ?? "";
             foreach (var row in payrollRows) row.rateEdit = row.dailyRate;
         }
         catch (HttpRequestException) { errorMessage = "Payroll could not be loaded. Wait for Render to wake, then calculate again."; }
@@ -560,7 +614,7 @@ else
 
     private async Task SavePayrollAsync()
     {
-        if (payrollRows is null || payrollRows.Count == 0 || busy) return;
+        if (payrollRows is null || payrollRows.Count == 0 || busy || !PayrollPeriodMatches) return;
         busy = true;
         errorMessage = "";
         try
@@ -578,17 +632,22 @@ else
 
     private async Task SaveDailyRateAsync(PayrollRow row)
     {
-        var employee = employees.FirstOrDefault(x => x.employeeId == row.employeeId);
+        var employee = payrollEmployees.FirstOrDefault(x => x.employeeId == row.employeeId);
         if (employee is null || row.rateEdit < 0 || busy) { errorMessage = "Enter a valid non-negative daily rate."; return; }
         busy = true;
         errorMessage = "";
         try
         {
-            using var response = await Http.PutAsJsonAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}", new
+            using var body = JsonBody(new JsonObject
             {
-                employee.employeeId, employee.fullName, employee.position, employee.contactNumber, employee.address,
-                dailyRate = row.rateEdit
+                ["employeeId"] = employee.employeeId,
+                ["fullName"] = employee.fullName,
+                ["position"] = employee.position,
+                ["contactNumber"] = employee.contactNumber,
+                ["address"] = employee.address,
+                ["dailyRate"] = row.rateEdit
             });
+            using var response = await Http.PutAsync($"api/employees/{Uri.EscapeDataString(employee.employeeId)}", body);
             if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
             employee.dailyRate = row.rateEdit;
             await CalculatePayrollAsync();
@@ -599,11 +658,11 @@ else
 
     private async Task ExportPayrollAsync()
     {
-        if (payrollRows is null || payrollRows.Count == 0) return;
-        var csv = new System.Text.StringBuilder("Employee ID,Employee,Days Present,Recorded Absences,Late Minutes,Daily Rate,Gross Pay,Deductions,Net Demo Pay\r\n");
+        if (payrollRows is null || payrollRows.Count == 0 || !PayrollPeriodMatches) return;
+        var csv = new System.Text.StringBuilder("Employee ID,Employee,Days Present,Recorded Absences,Late Minutes,Daily Rate,Gross Pay,Late Deduction,Other Deductions,Total Deductions,Net Pay,Applied Policy\r\n");
         foreach (var row in payrollRows)
             csv.AppendJoin(',', Csv(row.employeeId), Csv(row.employeeName), row.daysPresent, row.daysAbsent, row.lateMinutes,
-                row.dailyRate.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.grossPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.deductions.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.netPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
+                row.dailyRate.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.grossPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.lateDeduction.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.otherDeductions.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.deductions.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row.netPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), Csv(row.policySnapshot)).Append("\r\n");
         await JS.InvokeVoidAsync("mecky.downloadText", $"payroll-{payrollFrom:yyyyMMdd}-{payrollTo:yyyyMMdd}.csv", csv.ToString(), "text/csv;charset=utf-8");
     }
 
@@ -654,15 +713,96 @@ else
         CloseEmployeeForm();
         CancelDeactivation();
         employeeNotice = "";
+        refreshNotice = "";
+        employeeFilter = "true";
+        policies.Clear();
+        policyConfirmed = false;
         worker = null; workerAttendance = null; dashboard = null; payrollRows = null; payrollSaved = false; connectedDevice = null; enrollmentMessages.Clear(); employees.Clear(); users.Clear(); attendanceRows.Clear();
     }
 
-    private void SelectView(string view) { activeView = view; errorMessage = ""; }
-    private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "ME" : string.Join("", name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
+        private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "ME" : string.Join("", name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
     private static string ShortDate(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("MMM d, yyyy") : value ?? "—";
     private static string ShortDate(DateTime value) => value.ToString("MMM d, yyyy");
     private static string Weekday(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("dddd") : "";
     private static string FormatMoment(string? value) => DateTime.TryParse(value, out var date) ? date.ToString("h:mm tt") : "—";
+    private sealed class TrendDay
+    {
+        public string date { get; set; } = "";
+        public int present { get; set; }
+        public int absent { get; set; }
+        public int late { get; set; }
+    }
+
+    private sealed class DeductionPolicyRecord
+    {
+        public string effectiveDate { get; set; } = "";
+        public decimal ratePerMinute { get; set; }
+    }
+
+    private string BarHeight(int value)
+    {
+        var maximum = Math.Max(1, dashboard?.employees ?? 1);
+        return $"height:{Math.Max(1, 100.0 * value / maximum).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
+
+    private void ResetPolicyConfirmation() => policyConfirmed = false;
+
+    private async Task SavePolicyAsync()
+    {
+        if (busy || !policyConfirmed) return;
+        busy = true;
+        errorMessage = "";
+        try
+        {
+            using var body = JsonBody(new JsonObject
+            {
+                ["effectiveDate"] = policyDate.ToString("yyyy-MM-dd"),
+                ["ratePerMinute"] = policyRate,
+                ["confirmed"] = true
+            });
+            using var response = await Http.PostAsync("api/payroll/policies", body);
+            if (!response.IsSuccessStatusCode) { errorMessage = await ReadServerErrorAsync(response); return; }
+            policyConfirmed = false;
+            await CalculatePayrollAsync();
+            refreshNotice = "Confirmed policy saved. Payroll preview updated.";
+        }
+        catch (HttpRequestException) { errorMessage = "Policy could not be saved. Refresh and check before retrying."; }
+        finally { busy = false; }
+    }
+
+    private async Task NavigateAsync(string view)
+    {
+        if (busy || refreshing) return;
+        activeView = view;
+        errorMessage = "";
+        refreshNotice = "";
+        await RefreshCurrentPageAsync();
+    }
+
+    private async Task RefreshCurrentPageAsync()
+    {
+        if (busy || refreshing) return;
+        refreshing = true;
+        busy = true;
+        errorMessage = "";
+        refreshNotice = "Updating page data…";
+        try
+        {
+            if (isWorker) await LoadWorkerAsync();
+            else switch (activeView)
+            {
+                case "Dashboard": await LoadAdminAsync(); break;
+                case "Employees": await LoadEmployeesAsync(); break;
+                case "Attendance": await LoadAttendanceAsync(); break;
+                case "Payroll": await CalculatePayrollAsync(); break;
+                case "User Access": await LoadUsersAsync(); break;
+            }
+            refreshNotice = errorMessage.Length == 0 ? $"Updated at {DateTime.Now:h:mm:ss tt}" : "";
+        }
+        catch (Exception) { errorMessage = "Could not refresh this page. Please try again."; refreshNotice = ""; }
+        finally { refreshing = false; busy = false; }
+    }
+
     private static string PrettyStatus(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return "Unknown";
@@ -678,11 +818,11 @@ else
 
     private sealed class LoginResult { public string token { get; set; } = ""; public string role { get; set; } = ""; public string username { get; set; } = ""; }
     private sealed class SignupResult { public string status { get; set; } = ""; public string message { get; set; } = ""; }
-    private sealed class DashboardSummary { public string date { get; set; } = ""; public int employees { get; set; } public int present { get; set; } public int late { get; set; } public int absent { get; set; } public List<AttendanceRecord> latest { get; set; } = new(); }
+    private sealed class DashboardSummary { public string date { get; set; } = ""; public int employees { get; set; } public int present { get; set; } public int late { get; set; } public int absent { get; set; } public List<AttendanceRecord> latest { get; set; } = new(); public List<TrendDay> trend { get; set; } = new(); }
     private sealed class EmployeePage { public List<EmployeeRecord> content { get; set; } = new(); }
     private sealed class UserAccountRecord { public long id { get; set; } public string username { get; set; } = ""; public string role { get; set; } = ""; public string? employeeId { get; set; } public bool active { get; set; } }
-    private sealed class EmployeeRecord { public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } public string? contactNumber { get; set; } public string? address { get; set; } public decimal dailyRate { get; set; } public int? sensorSlotId { get; set; } }
-    private sealed class PayrollRow { public string employeeId { get; set; } = ""; public string employeeName { get; set; } = ""; public int daysPresent { get; set; } public int daysAbsent { get; set; } public int lateMinutes { get; set; } public decimal dailyRate { get; set; } public decimal rateEdit { get; set; } public decimal grossPay { get; set; } public decimal deductions { get; set; } public decimal netPay { get; set; } }
+    private sealed class EmployeeRecord { public bool active { get; set; } = true; public string employeeId { get; set; } = ""; public string fullName { get; set; } = ""; public string? position { get; set; } public string? contactNumber { get; set; } public string? address { get; set; } public decimal dailyRate { get; set; } public int? sensorSlotId { get; set; } }
+    private sealed class PayrollRow { public decimal lateDeduction { get; set; } public decimal otherDeductions { get; set; } public bool awaitingPolicy { get; set; } public string policySnapshot { get; set; } = ""; public string employeeId { get; set; } = ""; public string employeeName { get; set; } = ""; public int daysPresent { get; set; } public int daysAbsent { get; set; } public int lateMinutes { get; set; } public decimal dailyRate { get; set; } public decimal rateEdit { get; set; } public decimal grossPay { get; set; } public decimal deductions { get; set; } public decimal netPay { get; set; } }
     private sealed class PayrollRunResponse { public string from { get; set; } = ""; public string to { get; set; } = ""; public bool saved { get; set; } public List<PayrollRow> rows { get; set; } = new(); }
     private sealed class PayrollPeriodRequest { public string from { get; set; } = ""; public string to { get; set; } = ""; }
     private sealed class EnrollmentCommand { public long id { get; set; } public string status { get; set; } = ""; public string? resultMessage { get; set; } }
