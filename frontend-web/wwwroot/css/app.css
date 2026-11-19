@@ -122,3 +122,7 @@ td.policy-detail { white-space: normal; min-width: 240px; max-width: 380px; font
     .compact-refresh { padding: 8px 10px; font-size: 11px; }
     .breadcrumb { font-size: 9px; }
 }
+
+.panel h2, .stat-card strong, .welcome-strip h2, .welcome-icon {
+    font-family: 'DM Sans', Arial, sans-serif;
+}
