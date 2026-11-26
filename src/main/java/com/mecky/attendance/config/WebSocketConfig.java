@@ -21,13 +21,20 @@ import java.util.concurrent.ConcurrentHashMap;
    Principal principal=s.getPrincipal();
    AppUser user=principal==null?null:users.findByUsername(principal.getName()).filter(u->u.active).orElse(null);
    if(user==null||(!"ADMIN".equals(user.role)&&!"EMPLOYEE".equals(user.role))){try{s.close(CloseStatus.NOT_ACCEPTABLE);}catch(Exception ignored){}return;}
-   sessions.put(s,new SessionIdentity(user.role,user.employeeId));
+   sessions.put(s,new SessionIdentity(user.role,user.employeeId,user.username,user.passwordVersion));
   }
   public void afterConnectionClosed(WebSocketSession s,CloseStatus c){sessions.remove(s);}
   public void publish(String json){publishToAdmins(json);}
   public void publishToAdmins(String json){for(var entry:sessions.entrySet())if("ADMIN".equals(entry.getValue().role))send(entry.getKey(),json);}
   public void publishAttendance(String employeeId,String json){for(var entry:sessions.entrySet()){SessionIdentity identity=entry.getValue();if("ADMIN".equals(identity.role)||("EMPLOYEE".equals(identity.role)&&employeeId.equals(identity.employeeId)))send(entry.getKey(),json);}}
-  private void send(WebSocketSession s,String json){try{if(s.isOpen())s.sendMessage(new TextMessage(json));}catch(Exception ignored){sessions.remove(s);}}
-  private record SessionIdentity(String role,String employeeId){}
+  private void send(WebSocketSession s,String json){try{
+   SessionIdentity identity=sessions.get(s);
+   AppUser user=identity==null?null:users.findByUsername(identity.username).orElse(null);
+   if(user==null||!user.active||user.passwordVersion!=identity.passwordVersion||!user.role.equals(identity.role)){
+    sessions.remove(s);s.close(CloseStatus.POLICY_VIOLATION);return;
+   }
+   if(s.isOpen())s.sendMessage(new TextMessage(json));
+  }catch(Exception ignored){sessions.remove(s);}}
+  private record SessionIdentity(String role,String employeeId,String username,int passwordVersion){}
  }
 }

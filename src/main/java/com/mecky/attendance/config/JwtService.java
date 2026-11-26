@@ -13,6 +13,7 @@ import java.util.Date;
   if(secret.getBytes(StandardCharsets.UTF_8).length<32)throw new IllegalArgumentException("JWT_SECRET must contain at least 32 bytes");
   key=Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));this.minutes=minutes;
  }
- public String issue(String username,String role){Instant now=Instant.now();return Jwts.builder().subject(username).claim("role",role).issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(minutes*60))).signWith(key).compact();}
+ public String issue(String username,String role){return issue(username,role,0);}
+ public String issue(String username,String role,int passwordVersion){Instant now=Instant.now();return Jwts.builder().subject(username).claim("role",role).claim("passwordVersion",passwordVersion).issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(minutes*60))).signWith(key).compact();}
  public Claims parse(String token){return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();}
 }
