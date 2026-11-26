@@ -63,3 +63,9 @@ Employees supports Active and Inactive filters and confirmed Deactivate/Reactiva
 Refresh page reloads the current view while retaining dates and filters. Navigating to a page loads its latest data. Payroll shows the applied policy, late and other deductions in its preview, saved result and CSV export. A missing applicable policy blocks saving a run with late minutes. Confirmed policies are immutable versions, with one version per effective date. Add another effective date to change the rate. Refreshing and retrying an existing period return the saved run.
 
 The Render demo still uses in-memory H2. Restarts clear records, policies and server fingerprint mappings. These changes preserve mappings across deactivation/reactivation while the database records exist.
+
+## Account passwords
+
+Signed-in admins and workers can open **Change password**, verify their current password, and enter and confirm a new password. Passwords require at least 10 characters and at most 72 UTF-8 bytes. A successful change signs the account out and invalidates its older API tokens.
+
+Admins can open **Account approvals → Reset password** on a worker row. The form verifies the admin's own current password before replacing the worker password. The worker signs in with the new password; approval status, employee identity, attendance and fingerprint mapping remain intact. Password changes do not approve pending accounts. Existing installations must apply migration V6. Password changes in the in-memory Render demo reset on service restart.
