@@ -9,6 +9,7 @@ public class AppUser {
  @Column(nullable=false,length=10) public String role="ADMIN";
  @Column(name="employee_id",unique=true,length=30) public String employeeId;
  @Column(nullable=false) public boolean active=true;
+ @Column(name="password_version",nullable=false) public int passwordVersion=0;
  @Column(name="created_at",nullable=false) public LocalDateTime createdAt=LocalDateTime.now();
  protected AppUser() {}
  public AppUser(String username,String passwordHash,String role){this.username=username;this.passwordHash=passwordHash;this.role=role;}
