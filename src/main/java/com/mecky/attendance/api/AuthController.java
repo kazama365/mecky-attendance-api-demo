@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
   if(u.isPresent()){
    failedAttempts.remove(key);var x=u.get();
    if(!x.active)return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of("error","Your account is waiting for admin approval."));
-   return ResponseEntity.ok(new LoginResponse(jwt.issue(x.username,x.role),x.role,x.username));
+   return ResponseEntity.ok(new LoginResponse(jwt.issue(x.username,x.role,x.passwordVersion),x.role,x.username));
   }
   registerFailure(key,now);return ResponseEntity.status(401).body(java.util.Map.of("error","Invalid username or password"));
  }
