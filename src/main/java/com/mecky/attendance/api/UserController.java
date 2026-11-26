@@ -26,7 +26,7 @@ public class UserController {
   if(!u.role.equals(r.role()))throw new IllegalArgumentException("An account role cannot be changed after creation");
   u.username=r.username();if("EMPLOYEE".equals(u.role))u.employeeId=r.employeeId();
   if(r.active()!=null)u.active=r.active();
-  if(r.password()!=null&&!r.password().isBlank()){if(r.password().length()<10)throw new IllegalArgumentException("Password must contain at least 10 characters");u.passwordHash=passwords.encode(r.password());}
+  if(r.password()!=null&&!r.password().isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Use Reset password to change a worker password, or Change password for your own account.");
   users.save(u);return view(u);
  }
  private void validateAccount(UserRequest r,Long accountId){
