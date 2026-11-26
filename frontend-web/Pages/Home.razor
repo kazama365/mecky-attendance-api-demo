@@ -3,10 +3,16 @@
 @using System.Net.Http.Json
 @using System.Text.Json.Nodes
 @using Microsoft.JSInterop
+@using frontend_web.Components
 @inject HttpClient Http
 @inject IJSRuntime JS
 
 <PageTitle>Mecky's Attendance</PageTitle>
+
+@if (isSignedIn && showPasswordPanel)
+{
+    <PasswordPanel @key="passwordPanelKey" ResetUserId="@passwordResetUserId" AccountName="@passwordAccountName" OnSaved="PasswordSavedAsync" OnCancel="ClosePasswordPanel" />
+}
 
 @if (!isSignedIn)
 {
@@ -26,6 +32,7 @@
                 <p class="eyebrow green">@(showSignup ? "WORKER REGISTRATION" : "WELCOME BACK")</p>
                 <h2>@(showSignup ? "Create a worker account" : "Sign in to your account")</h2>
                 <p class="muted">@(showSignup ? "Use the Employee ID given by the Admin. Your account needs approval before sign-in." : "Use your admin or worker account to continue.")</p>
+                @if (passwordNotice.Length > 0) { <div class="alert success" role="status">@passwordNotice</div> }
                 @if (!showSignup)
                 {
                     <form class="login-form" @onsubmit="LoginAsync" @onsubmit:preventDefault="true">
@@ -81,7 +88,7 @@
 else if (isWorker)
 {
     <div class="portal-shell">
-        <header class="portal-header"><a class="wordmark" href="/"><span class="brand-mark small">M</span><span>MECKY'S<small>ATTENDANCE PORTAL</small></span></a><div class="header-user"><span class="avatar">@Initials(worker?.fullName)</span><span class="user-name">@worker?.fullName<small>Worker account</small></span><button class="button outline" @onclick="SignOut">Sign out</button></div></header>
+        <header class="portal-header"><a class="wordmark" href="/"><span class="brand-mark small">M</span><span>MECKY'S<small>ATTENDANCE PORTAL</small></span></a><div class="header-user"><span class="avatar">@Initials(worker?.fullName)</span><span class="user-name">@worker?.fullName<small>Worker account</small></span><button class="button outline" @onclick="OpenOwnPassword">Change password</button><button class="button outline" @onclick="SignOut">Sign out</button></div></header>
         <main class="portal-main" aria-busy="@refreshing">
             @if (refreshNotice.Length > 0) { <div class="refresh-notice" role="status">@refreshNotice</div> }
             <div class="page-heading"><div><p class="eyebrow green">MY WORKSPACE</p><h1>My attendance</h1><p class="muted">Review your scans and workdays for up to five days.</p></div><button class="button outline" @onclick="RefreshCurrentPageAsync" disabled="@busy">↻ &nbsp;Refresh status</button></div>
@@ -111,7 +118,7 @@ else
             <button class="side-link @(activeView == "Attendance" ? "active" : "")" @onclick="OpenAttendanceAsync"><span>◷</span>Attendance</button>
             <button class="side-link @(activeView == "Payroll" ? "active" : "")" @onclick="OpenPayrollAsync"><span>₱</span>Payroll</button>
             <button class="side-link @(activeView == "User Access" ? "active" : "")" @onclick="OpenUserAccessAsync"><span>♙</span>Account approvals</button>
-        </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
+        </nav><div class="sidebar-bottom"><div class="sidebar-user"><span class="avatar">AD</span><span>@username<small>Administrator</small></span></div><button class="side-link" @onclick="OpenOwnPassword"><span>⚿</span>Change password</button><button class="side-link signout" @onclick="SignOut"><span>↪</span>Sign out</button></div></aside>
         <main class="admin-main">
             <header class="admin-topbar"><div class="breadcrumb">MECKY'S <span>/</span> @(activeView.ToUpperInvariant())</div><div class="top-user"><button class="button outline compact-refresh" @onclick="RefreshCurrentPageAsync" disabled="@(busy || refreshing)">@(refreshing ? "Refreshing…" : "Refresh page")</button><span class="live-pill"><span></span> Server connected</span><span class="avatar">AD</span></div></header>
             <div class="admin-content" aria-busy="@refreshing">
@@ -238,7 +245,7 @@ else
                         @if (!users.Any(x => x.role == "EMPLOYEE")) { <tr><td colspan="5" class="empty-cell">No worker accounts yet. Requests appear here after a worker signs up.</td></tr> }
                         @foreach (var account in users.Where(x => x.role == "EMPLOYEE").OrderBy(x => x.active).ThenBy(x => x.username))
                         {
-                            <tr><td><strong>@account.username</strong></td><td>@(account.employeeId ?? "—")</td><td>Worker</td><td><span class="status @(account.active ? "good" : "warning")">@(account.active ? "Approved" : "Pending approval")</span></td><td>@if (!account.active) { <button class="button primary approve-button" @onclick="() => ApproveUserAsync(account)" disabled="@busy">Approve account</button> } else { <span class="muted">—</span> }</td></tr>
+                            <tr><td><strong>@account.username</strong></td><td>@(account.employeeId ?? "—")</td><td>Worker</td><td><span class="status @(account.active ? "good" : "warning")">@(account.active ? "Approved" : "Pending approval")</span></td><td>@if (!account.active) { <button class="button primary approve-button" @onclick="() => ApproveUserAsync(account)" disabled="@busy">Approve account</button> } <button class="text-button" @onclick="() => OpenWorkerPasswordReset(account)" disabled="@busy">Reset password</button></td></tr>
                         }
                         </tbody></table></div></section>
                 }
@@ -255,6 +262,44 @@ else
 }
 
 @code {
+    private bool showPasswordPanel;
+    private long? passwordResetUserId;
+    private string passwordAccountName = "";
+    private string passwordNotice = "";
+    private int passwordPanelKey;
+
+    private void OpenOwnPassword()
+    {
+        passwordResetUserId = null;
+        passwordAccountName = username;
+        passwordPanelKey++;
+        showPasswordPanel = true;
+    }
+
+    private void OpenWorkerPasswordReset(UserAccountRecord account)
+    {
+        passwordResetUserId = account.id;
+        passwordAccountName = account.username;
+        passwordPanelKey++;
+        showPasswordPanel = true;
+    }
+
+    private void ClosePasswordPanel()
+    {
+        showPasswordPanel = false;
+        passwordResetUserId = null;
+        passwordAccountName = "";
+    }
+
+    private Task PasswordSavedAsync(string message)
+    {
+        bool resetWorker = passwordResetUserId.HasValue;
+        ClosePasswordPanel();
+        if (resetWorker) refreshNotice = message;
+        else { SignOut(); passwordNotice = message; }
+        return Task.CompletedTask;
+    }
+
     private bool refreshing;
     private string refreshNotice = "";
     private string employeeFilter = "true";
@@ -378,6 +423,8 @@ else
                 errorMessage = "This account does not have access to the attendance portal.";
                 return;
             }
+            passwordNotice = "";
+            password = "";
             isSignedIn = true;
             if (isWorker) await LoadWorkerAsync();
             else await LoadAdminAsync();
@@ -708,6 +755,8 @@ else
 
     private void SignOut()
     {
+        ClosePasswordPanel();
+        passwordNotice = "";
         Http.DefaultRequestHeaders.Authorization = null;
         isSignedIn = false; isWorker = false; showSignup = false; username = ""; password = ""; signupEmployeeId = ""; signupUsername = ""; signupPassword = ""; signupConfirmPassword = ""; signupMessage = ""; errorMessage = "";
         CloseEmployeeForm();
