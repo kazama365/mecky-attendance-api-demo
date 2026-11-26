@@ -126,3 +126,34 @@ td.policy-detail { white-space: normal; min-width: 240px; max-width: 380px; font
 .panel h2, .stat-card strong, .welcome-strip h2, .welcome-icon {
     font-family: 'DM Sans', Arial, sans-serif;
 }
+
+.password-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: #102c3cb3;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+.password-panel {
+    width: min(100%, 460px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    background: white;
+    padding: 28px;
+    border-radius: 16px;
+    box-shadow: 0 24px 70px #061c3040;
+}
+.password-panel h2 { margin: 0 0 12px; font-size: 23px; }
+.password-panel .muted { margin-bottom: 20px; }
+.password-panel .password-hint { color: #668078; margin: 8px 0 16px; font-size: 11px; }
+.password-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+@media(max-width:620px) {
+    .password-panel { padding: 22px; }
+    .portal-header { height: auto; min-height: 74px; flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+    .header-user { flex-wrap: wrap; justify-content: flex-end; }
+    .header-user .avatar { display: none; }
+    .header-user .button { padding: 9px 10px; font-size: 11px; }
+}
