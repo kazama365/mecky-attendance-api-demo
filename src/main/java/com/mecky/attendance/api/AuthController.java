@@ -3,6 +3,7 @@ import com.mecky.attendance.api.ApiDtos.*;
 import com.mecky.attendance.repo.UserRepository;
 import com.mecky.attendance.config.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.*;
 import jakarta.validation.Valid;
@@ -12,7 +13,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @RestController @RequestMapping("/api/auth") public class AuthController {
  private final UserRepository users;private final PasswordEncoder passwords;private final JwtService jwt;
  private final ConcurrentHashMap<String,AttemptWindow> failedAttempts=new ConcurrentHashMap<>();
- public AuthController(UserRepository u,PasswordEncoder p,JwtService j){users=u;passwords=p;jwt=j;}
+ private final Environment environment;
+ public AuthController(UserRepository u,PasswordEncoder p,JwtService j,Environment environment){
+  users=u;passwords=p;jwt=j;this.environment=environment;
+ }
+ @GetMapping("/demo-mode")
+ public boolean demoMode() {
+  return environment.matchesProfiles("demo & !neon");
+ }
  @PostMapping("/login") public ResponseEntity<?> login(@Valid @RequestBody LoginRequest r,HttpServletRequest request){
   String key=request.getRemoteAddr()+":"+r.username().toLowerCase(java.util.Locale.ROOT);Instant now=Instant.now();
   if(isLocked(key,now))return ResponseEntity.status(429).body(java.util.Map.of("error","Too many failed login attempts. Try again in 10 minutes."));
