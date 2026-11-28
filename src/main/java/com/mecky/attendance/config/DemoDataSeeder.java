@@ -25,7 +25,7 @@ import java.util.List;
 
 /** Creates disposable sample accounts and attendance only when the demo profile is active. */
 @Component
-@Profile("demo")
+@Profile("demo & !neon")
 public class DemoDataSeeder implements CommandLineRunner {
     private static final ZoneId MANILA = ZoneId.of("Asia/Manila");
 
