@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Profile;
 import java.nio.file.*;
 import java.time.*;
 import java.util.*;
-@Component @Profile("!demo") public class BackupJob {
+@Component @Profile("!demo & !neon") public class BackupJob {
  @Value("${app.backup.directory}") String directory;
  @Scheduled(cron="0 0 2 * * *",zone="Asia/Manila") public void backup(){
   String exe=System.getenv().getOrDefault("MYSQLDUMP_PATH","mysqldump");String user=System.getenv().getOrDefault("BACKUP_DB_USERNAME","mecky_backup");String pass=System.getenv().getOrDefault("BACKUP_DB_PASSWORD","");

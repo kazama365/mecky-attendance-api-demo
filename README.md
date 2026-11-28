@@ -69,3 +69,19 @@ The Render demo still uses in-memory H2. Restarts clear records, policies and se
 Signed-in admins and workers can open **Change password**, verify their current password, and enter and confirm a new password. Passwords require at least 10 characters and at most 72 UTF-8 bytes. A successful change signs the account out and invalidates its older API tokens.
 
 Admins can open **Account approvals → Reset password** on a worker row. The form verifies the admin's own current password before replacing the worker password. The worker signs in with the new password; approval status, employee identity, attendance and fingerprint mapping remain intact. Password changes do not approve pending accounts. Existing installations must apply migration V6. Password changes in the in-memory Render demo reset on service restart.
+
+## Persistent Render deployment with Neon
+
+Create a dedicated Neon PostgreSQL project and use its direct database connection. In the existing Render web service, set the following environment variables together for the first PostgreSQL deploy:
+
+| Variable | Value |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `neon` |
+| `NEON_JDBC_URL` | `jdbc:postgresql://<direct-neon-host>/<database>?sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory` |
+| `NEON_DB_USERNAME` | The Neon database role |
+| `NEON_DB_PASSWORD` | The Neon database role password |
+| `MECKY_INITIAL_ADMIN_PASSWORD` | A private password of at least 16 characters and at most 72 UTF-8 bytes |
+
+Keep the existing `JWT_SECRET` and `DEVICE_API_KEY`. Use Render environment variables for credentials. Flyway applies the PostgreSQL schema from `src/main/resources/db/postgresql` and Hibernate validates it. The first start of an empty database creates the private `admin` account. Subsequent starts leave the stored password intact, so remove the initial password variable after verifying sign-in. The Neon profile does not insert sample records.
+
+The cutover starts with an empty Neon database. Export any wanted records from the running H2 instance before restarting it. Verify persistence by creating a test record, restarting the app, and checking the record and login again. Store PostgreSQL backups separately from the Render container, which has an ephemeral filesystem.
