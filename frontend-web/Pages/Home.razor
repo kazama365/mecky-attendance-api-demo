@@ -25,7 +25,7 @@
                 <p class="brand-copy">A clear view of every shift, scan, and workday in one place.</p>
                 <div class="login-feature"><span>01</span><div><strong>One attendance record</strong><small>Fingerprint scans appear in the same system.</small></div></div>
                 <div class="login-feature"><span>02</span><div><strong>Admin and worker access</strong><small>Each account sees the information meant for them.</small></div></div>
-                <div class="brand-footer">MECKY ATTENDANCE SYSTEM <span>•</span> DEMO</div>
+                <div class="brand-footer">MECKY ATTENDANCE SYSTEM @if (demoMode) { <span>•</span> <text>DEMO</text> }</div>
             </div>
             <div class="login-form-panel">
                 <div class="mobile-brand"><div class="brand-mark">M</div><span>MECKY'S</span></div>
@@ -50,11 +50,14 @@
                         <div><strong>New worker?</strong><small>Get your Employee ID from the admin to request access.</small></div>
                         <button class="button outline" type="button" @onclick="ShowSignup">Sign up</button>
                     </div>
-                    <div class="demo-box">
-                    <div><strong>Demo accounts</strong><small>These accounts work on the demo server only.</small></div>
-                    <button class="demo-choice" type="button" @onclick="UseAdminDemo"><span>Admin</span><b>Fill details</b></button>
-                    <button class="demo-choice" type="button" @onclick="UseWorkerDemo"><span>Worker</span><b>Fill details</b></button>
-                    </div>
+                    @if (demoMode)
+                    {
+                        <div class="demo-box">
+                            <div><strong>Demo accounts</strong><small>These accounts work on the demo server only.</small></div>
+                            <button class="demo-choice" type="button" @onclick="UseAdminDemo"><span>Admin</span><b>Fill details</b></button>
+                            <button class="demo-choice" type="button" @onclick="UseWorkerDemo"><span>Worker</span><b>Fill details</b></button>
+                        </div>
+                    }
                 }
                 else
                 {
@@ -227,7 +230,7 @@ else
                                 <tr><td><strong>@row.employeeName</strong><small>@row.employeeId</small></td><td>@row.daysPresent</td><td>@row.daysAbsent</td><td>@row.lateMinutes</td><td>@if (payrollSaved) { @Money(row.dailyRate) } else { <input aria-label="Daily rate for @row.employeeName" type="number" min="0" step="0.01" @bind="row.rateEdit" /> }</td><td><strong>@Money(row.grossPay)</strong></td><td>@Money(row.lateDeduction)</td><td>@Money(row.otherDeductions)</td><td>@Money(row.deductions)</td><td><strong>@Money(row.netPay)</strong></td><td class="policy-detail">@row.policySnapshot</td>@if (!payrollSaved) { <td><button class="text-button" @onclick="() => SaveDailyRateAsync(row)" disabled="@busy">Save rate</button></td> }</tr>
                             }
                         </tbody><tfoot><tr><th colspan="5">TOTAL</th><th>@Money(payrollRows.Sum(x => x.grossPay))</th><th>@Money(payrollRows.Sum(x => x.lateDeduction))</th><th>@Money(payrollRows.Sum(x => x.otherDeductions))</th><th>@Money(payrollRows.Sum(x => x.deductions))</th><th>@Money(payrollRows.Sum(x => x.netPay))</th><th></th>@if (!payrollSaved) { <th></th> }</tr></tfoot></table></div></section>
-                        <p class="footnote">@(payrollRows.Any(x => x.awaitingPolicy) ? "Saving is disabled until a confirmed policy covers each late attendance date." : "") Saved runs cannot be changed. Render's current demo uses an in-memory H2 database, so saved payroll and attendance are cleared when the service restarts.</p>
+                        <p class="footnote">@(payrollRows.Any(x => x.awaitingPolicy) ? "Saving is disabled until a confirmed policy covers each late attendance date." : "") Saved runs cannot be changed. @if (demoMode) { <text>Demo records reset when the service restarts.</text> }</p>
                     }
                     else
                     {
@@ -354,6 +357,20 @@ else
 
     private void ShowSignup() { showSignup = true; errorMessage = ""; signupMessage = ""; }
     private void ShowLogin() { showSignup = false; errorMessage = ""; signupMessage = ""; }
+    private bool demoMode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            demoMode = await Http.GetFromJsonAsync<bool>("api/auth/demo-mode");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            // Keep the sign-in form usable if the demo setting cannot be loaded.
+        }
+    }
+
     private void UseAdminDemo() { username = "admin"; password = "DemoAdmin2026!"; errorMessage = ""; }
     private void UseWorkerDemo() { username = "demo-worker-one"; password = "DemoWorker2026!"; errorMessage = ""; }
 
